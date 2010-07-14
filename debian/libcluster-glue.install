@@ -1,0 +1,5 @@
+usr/lib/liblrm.so.*
+usr/lib/libpils.so.*
+usr/lib/libplumb.so.*
+usr/lib/libplumbgpl.so.*
+usr/lib/libstonith.so.*

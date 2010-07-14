@@ -1,0 +1,53 @@
+Source: cluster-glue
+Section: admin
+Priority: optional
+Maintainer: Debian HA Maintainers <debian-ha-maintainers@lists.alioth.debian.org>
+Uploaders: Martin Loschwitz <madkiss@debian.org>, Anibal Monsalve Salazar <anibal@debian.org>, Simon Horman <horms@debian.org>, Frederik Schüler <fs@debian.org>
+Build-Depends: debhelper (>= 7), libsnmp-dev, libglib2.0-dev, perl, net-tools, iputils-ping, python, psmisc, libnet1-dev, iproute, libtool, libcurl4-openssl-dev | libcurl3-openssl-dev, libxml2-dev, bison, flex, uuid-dev, lynx, libbz2-dev, zlib1g-dev, uuid-dev, libsensors4-dev | libsensors-dev, libltdl3-dev, swig, openssh-client, libgnutls-dev, python-central (>= 0.5), python-dev, libpam0g-dev, libncurses5-dev, psmisc, libopenhpi-dev, libopenipmi-dev, autoconf, automake, libtool, xsltproc, docbook-xsl, chrpath, docbook-xml
+Standards-Version: 3.9.0
+Homepage: http://hg.linux-ha.org/glue/
+Vcs-Hg: http://hg.debian.org/hg/debian-ha/cluster-glue
+Vcs-Browser: http://hg.debian.org/hg/debian-ha/cluster-glue
+XS-Python-Version: current
+
+Package: libcluster-glue
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Replaces: cluster-glue (<= 1.0.3-2), heartbeat (<= 2.99.2+sles11r9-5)
+Conflicts: cluster-glue (<= 1.0.3-2), heartbeat (<= 2.99.2+sles11r9-5)
+Description: The reusable cluster components for Linux HA (libraries)
+ This package contains the libraries provided by the cluster
+ glue component by the Linux-HA project; it offers various
+ re-usable cluster stack libraries. If you plan to run the
+ Linux-HA cluster stack, you will need this package.
+
+Package: libcluster-glue-dev
+Architecture: any
+Section: libdevel
+Depends: ${shlibs:Depends}, ${misc:Depends}, libcluster-glue (= ${binary:Version})
+Replaces: cluster-glue-dev (<= 1.0.3-2)
+Conflicts: cluster-glue-dev (<= 1.0.3-2)
+Description: The reusable cluster components for Linux HA (library dev files)
+ This package contains the headers for the libraries provided 
+ by the cluster glue component by the Linux-HA project; it 
+ offers various re-usable cluster stack libraries. If you plan 
+ to run the Linux-HA cluster stack, you will need this package.
+
+Package: cluster-glue
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, python, libtimedate-perl
+Replaces: heartbeat (<= 2.99.2+sles11r9-5), heartbeat-common (<= 2.99.2+sles11r9-5), libheartbeat2 (<= 2.99.2+sles11r9-5)
+Conflicts: heartbeat (<= 2.99.2+sles11r9-5), heartbeat-common (<= 2.99.2+sles11r9-5), libheartbeat2 (<= 2.99.2+sles11r9-5)
+Description: The reusable cluster components for Linux HA
+ This package contains node fencing plugins, an error reporting
+ utility, and other reusable cluster components from
+ the Linux HA project.
+
+Package: cluster-glue-dev
+Architecture: any
+Depends: cluster-glue (= ${binary:Version}), ${misc:Depends}
+Replaces: libheartbeat2-dev (<= 2.99.2+sles11r9-5), heartbeat-dev (<= 2.99.2+sles11r9-5)
+Conflicts: libheartbeat2-dev (<= 2.99.2+sles11r9-5), heartbeat-dev (<= 2.99.2+sles11r9-5)
+Description: Development files for the cluster glue components
+ This package includes headers and static libraries for the glue
+ cluster components.
