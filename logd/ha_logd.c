@@ -87,18 +87,20 @@ static gboolean needs_shutdown = FALSE;
 static struct {
 	char		debugfile[MAXLINE];
 	char		logfile[MAXLINE];
-	char		entity[MAXLINE];
+	char		entity[MAXENTITY];
+	char		syslogprefix[MAXENTITY];
 	int		log_facility;
 	mode_t		logmode;
 	gboolean	syslogfmtmsgs;
 } logd_config =
 	{
-		"",
-		"",
-		"logd",
-		HA_LOG_FACILITY,
-		0644,
-		FALSE
+		.debugfile = "",
+		.logfile   = "",
+		.entity    = "logd",
+		.syslogprefix = "",
+		.log_facility = HA_LOG_FACILITY,
+		.logmode  = 0644,
+		.syslogfmtmsgs = FALSE
 	};
 
 static void	logd_log(const char * fmt, ...) G_GNUC_PRINTF(1,2);
@@ -106,6 +108,7 @@ static int	set_debugfile(const char* option);
 static int	set_logfile(const char* option);
 static int	set_facility(const char * value);
 static int	set_entity(const char * option);
+static int	set_syslogprefix(const char * option);
 static int	set_sendqlen(const char * option);
 static int	set_recvqlen(const char * option);
 static int	set_logmode(const char * option);
@@ -123,15 +126,11 @@ static struct directive {
 	{"logfile",	set_logfile},
 	{"logfacility",	set_facility},
 	{"entity",	set_entity},
+	{"syslogprefix",set_syslogprefix},
 	{"sendqlen",	set_sendqlen},
 	{"recvqlen",	set_recvqlen},
 	{"logmode",	set_logmode},
 	{"syslogmsgfmt",set_syslogfmtmsgs}
-};
-
-struct _syslog_code {
-        const char    *c_name;
-        int     c_val;
 };
 
 static void
@@ -139,11 +138,10 @@ logd_log( const char * fmt, ...)
 {
 	char		buf[MAXLINE];
 	va_list		ap;
-	int		nbytes;
 	
 	buf[MAXLINE-1] = EOS;
 	va_start(ap, fmt);
-	nbytes=vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+	vsnprintf(buf, sizeof(buf)-1, fmt, ap);
 	va_end(ap);
 	
 	fprintf(stderr, "%s", buf);
@@ -199,8 +197,34 @@ set_entity(const char * option)
 		logd_config.entity[0] = EOS;
 		return FALSE;
 	}
-	cl_log(LOG_INFO, "setting entity to %s", option);
-	strncpy(logd_config.entity, option, MAXLINE);
+	strncpy(logd_config.entity, option, MAXENTITY);
+	logd_config.entity[MAXENTITY-1] = '\0';
+	if (strlen(option) >= MAXENTITY)
+		cl_log(LOG_WARNING, "setting entity to %s (truncated from %s)",
+			logd_config.entity, option);
+	else
+		cl_log(LOG_INFO, "setting entity to %s", logd_config.entity);
+	return TRUE;
+
+}
+
+static int
+set_syslogprefix(const char * option)
+{
+	if (!option){
+		logd_config.syslogprefix[0] = EOS;
+		return FALSE;
+	}
+	strncpy(logd_config.syslogprefix, option, MAXENTITY);
+	logd_config.syslogprefix[MAXENTITY-1] = '\0';
+	if (strlen(option) >= MAXENTITY)
+		cl_log(LOG_WARNING,
+			"setting syslogprefix to %s (truncated from %s)",
+			logd_config.syslogprefix, option);
+	else
+		cl_log(LOG_INFO,
+			"setting syslogprefix to %s",
+			logd_config.syslogprefix);
 	return TRUE;
 
 }
@@ -510,8 +534,12 @@ logd_make_daemon(gboolean daemonize)
 	
 	if (cl_lock_pidfile(LOGD_PIDFILE) < 0 ){
 		pid = cl_read_pidfile(LOGD_PIDFILE);
-		fprintf(stderr, "%s: already running [pid %ld].\n",
-			cmdname, pid);
+		if (pid > 0)
+			fprintf(stderr, "%s: already running [pid %ld].\n",
+				cmdname, pid);
+		else
+			fprintf(stderr, "%s: problem creating pid file %s\n",
+				cmdname, LOGD_PIDFILE);
 		exit(LSB_EXIT_OK);
 	}
 	
@@ -703,6 +731,21 @@ logd_term_action(int sig, gpointer userdata)
         return TRUE;
 }
 
+/*
+ * Handle SIGHUP to re-open log files
+ */
+static gboolean
+logd_hup_action(int sig, gpointer userdata)
+{
+	cl_log_close_log_files();
+	if (write_process_pid)
+		/* do we want to propagate the HUP,
+		 * or do we assume that it was a killall anyways? */
+		CL_KILL(write_process_pid, SIGHUP);
+	else
+		cl_log(LOG_INFO, "SIGHUP received, re-opened log files");
+	return TRUE;
+}
 
 static void
 read_msg_process(IPC_Channel* chan)
@@ -742,6 +785,8 @@ read_msg_process(IPC_Channel* chan)
 
 	G_main_add_IPC_Channel(G_PRIORITY_DEFAULT, chan, FALSE,NULL,NULL,NULL);
 	
+	G_main_add_SignalHandler(G_PRIORITY_DEFAULT, SIGHUP, 
+				 logd_hup_action, mainloop, NULL);
 	g_main_run(mainloop);
 	
 	return;
@@ -750,16 +795,13 @@ read_msg_process(IPC_Channel* chan)
 static gboolean
 direct_log(IPC_Channel* ch, gpointer user_data)
 {
-	
 	IPC_Message*		ipcmsg;
 	GMainLoop*		loop;
-	
+	int			pri = LOG_DEBUG + 1;
 
 	loop =(GMainLoop*)user_data;
 	
-
 	while(ch->ops->is_message_pending(ch)){
-		
 		if (ch->ch_status == IPC_DISCONNECT){
 			cl_log(LOG_ERR, "read channel is disconnected:"
 			       "something very wrong happened");
@@ -778,6 +820,8 @@ direct_log(IPC_Channel* ch, gpointer user_data)
 			char *msgtext;
 			
 			logmsghdr = (LogDaemonMsgHdr*) ipcmsg->msg_body;
+			/* this copy nonsense is here because apparently ia64
+			 * complained about "unaligned memory access. */
 #define	COPYFIELD(copy, msg, field) memcpy(((u_char*)&copy.field), ((u_char*)&msg->field), sizeof(copy.field))
 			COPYFIELD(copy, logmsghdr, use_pri_str);
 			COPYFIELD(copy, logmsghdr, entity);
@@ -791,7 +835,9 @@ direct_log(IPC_Channel* ch, gpointer user_data)
 			,	copy.use_pri_str
 			,	copy.entity, copy.entity_pid
 			,	copy.timestamp);
-		
+
+			if (copy.priority < pri)
+				pri = copy.priority;
 
 			(void)logd_log;
 /*
@@ -808,14 +854,17 @@ direct_log(IPC_Channel* ch, gpointer user_data)
 				ipcmsg->msg_done(ipcmsg);
 			}
 		}
-		
 	}
+	/* current message backlog processed,
+	 * about to return to mainloop,
+	 * fflush and potentially fsync stuff */
+	cl_log_do_fflush(pri <= LOG_ERR);
+
 	if(needs_shutdown) {
 		cl_log(LOG_INFO, "Exiting write process");
 		g_main_quit(loop);
 		return FALSE;
 	}
-	
 	return TRUE;
 }
 
@@ -851,6 +900,9 @@ write_msg_process(IPC_Channel* readchan)
 
 	G_main_add_SignalHandler(G_PRIORITY_HIGH, SIGTERM, 
 				 logd_term_write_action, mainloop, NULL);
+				 
+	G_main_add_SignalHandler(G_PRIORITY_DEFAULT, SIGHUP, 
+				 logd_hup_action, mainloop, NULL);
 	
 	g_main_run(mainloop);
 	
@@ -975,9 +1027,9 @@ main(int argc, char** argv, char** envp)
 	if (strlen(logd_config.logfile) > 0) {
 		cl_log_set_logfile(logd_config.logfile);
 	}
+	cl_log_set_syslogprefix(logd_config.syslogprefix);
 	cl_log_set_entity(logd_config.entity);
 	cl_log_set_facility(logd_config.log_facility);
-	
 	
 	cl_log(LOG_INFO, "logd started with %s.",
 	       cfgfile ? cfgfile : "default configuration");
@@ -1002,25 +1054,25 @@ main(int argc, char** argv, char** envp)
         }
 
 	switch(pid = fork()){
-		
 	case -1:	
 		cl_perror("Can't fork child process!");
 		return -1;
 	case 0:
 		/*child*/
+		cl_log_use_buffered_io(1);
 		set_proc_title("ha_logd: write process");
 		write_msg_process(chanspair[WRITE_PROC_CHAN]);		
 		break;
 	default:
-		/*parent*/		
+		/*parent*/
 		set_proc_title("ha_logd: read process");
 		write_process_pid = pid;
-		
+		/* we don't expect to log anything in the parent. */
+		cl_log_close_log_files();
+
 		read_msg_process(chanspair[READ_PROC_CHAN]);
 		break;
 	}
-	
-	
 	return 0;
 }
 

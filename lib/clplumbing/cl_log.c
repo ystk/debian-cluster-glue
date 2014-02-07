@@ -56,6 +56,7 @@
 #endif
 
 #define	DFLT_ENTITY	"cluster"
+#define	DFLT_PREFIX	""
 #define NULLTIME 	0
 #define QUEUE_SATURATION_FUZZ 10
 
@@ -69,17 +70,19 @@ static gboolean		syslogformatfile = TRUE;
 int LogToDaemon(int priority, const char * buf, int bstrlen, gboolean use_pri_str);
 
 static int LogToLoggingDaemon(int priority, const char * buf, int bstrlen, gboolean use_pri_str);
-IPC_Message* ChildLogIPCMessage(int priority, const char *buf, int bstrlen, 
+static IPC_Message* ChildLogIPCMessage(int priority, const char *buf, int bstrlen, 
 				gboolean use_priority_str, IPC_Channel* ch);
-void	FreeChildLogIPCMessage(IPC_Message* msg);
-gboolean send_dropped_message(gboolean use_pri_str, IPC_Channel *chan);
+static void	FreeChildLogIPCMessage(IPC_Message* msg);
+static gboolean send_dropped_message(gboolean use_pri_str, IPC_Channel *chan);
+static int cl_set_logging_wqueue_maxlen(int qlen);
 
-const char * prio2str(int priority);
 static int		use_logging_daemon =  FALSE;
 static int		conn_logd_time = 0;
 static char		cl_log_entity[MAXENTITY]= DFLT_ENTITY;
+static char		cl_log_syslogprefix[MAXENTITY] = DFLT_PREFIX;
 static char		common_log_entity[MAXENTITY]= DFLT_ENTITY;
 static int		cl_log_facility = LOG_USER;
+static int		use_buffered_io = 0;
 
 static void		cl_opensyslog(void);
 static int		syslog_enabled = 0;
@@ -155,11 +158,17 @@ cl_log_get_logdtime(void)
 
 void
 cl_log_set_logdtime(int logdtime)
-{	
-	conn_logd_time = logdtime;	
+{
+	conn_logd_time = logdtime;
 	return;
 }
 
+void
+cl_log_use_buffered_io(int truefalse)
+{
+	use_buffered_io = truefalse;
+	cl_log_close_log_files();
+}
 
 #define ENVPRE		"HA_"
 
@@ -173,7 +182,7 @@ cl_log_set_logdtime(int logdtime)
 #define TRADITIONAL_COMPRESSION "HA_traditional_compression"
 #define COMPRESSION	 "HA_compression"
 
-void
+static void
 inherit_compress(void)
 {
 	char* inherit_env = NULL;
@@ -270,7 +279,7 @@ add_logging_channel_mainloop(IPC_Channel* chan)
 	
 	if (chp == NULL){
 		cl_log(LOG_INFO, "adding logging channel to mainloop failed");
-	}	
+	}
 
 	logging_chan_in_main_loop = TRUE;
 	
@@ -292,14 +301,14 @@ create_logging_channel(void)
 {
 	GHashTable*	attrs;
 	char		path[] = IPC_PATH_ATTR;
-	char		sockpath[] = HA_LOGDAEMON_IPC;	
+	char		sockpath[] = HA_LOGDAEMON_IPC;
 	IPC_Channel*	chan;
 	static gboolean	complained_yet = FALSE;
 	
 	attrs = g_hash_table_new(g_str_hash, g_str_equal);
-	g_hash_table_insert(attrs, path, sockpath);	
+	g_hash_table_insert(attrs, path, sockpath);
 
-	chan =ipc_channel_constructor(IPC_ANYTYPE, attrs);       	
+	chan =ipc_channel_constructor(IPC_ANYTYPE, attrs);
 	
 	g_hash_table_destroy(attrs);	
 	
@@ -326,7 +335,7 @@ create_logging_channel(void)
 
 	if (create_logging_channel_callback){
 		create_logging_channel_callback(chan);
-	}		
+	}
 	
 	
 	return chan;
@@ -348,7 +357,7 @@ cl_log_test_logd(void)
 		logging_daemon_chan = chan = NULL;
 	}
 	
-	logging_daemon_chan = chan = create_logging_channel();			
+	logging_daemon_chan = chan = create_logging_channel();
 	
 	if (chan == NULL){
 		return FALSE;
@@ -358,7 +367,7 @@ cl_log_test_logd(void)
 		if (!logging_chan_in_main_loop){
 			chan->ops->destroy(chan);
 		}
-		logging_daemon_chan = chan = NULL;	
+		logging_daemon_chan = chan = NULL;
 		return FALSE;
 	}
 	
@@ -397,20 +406,36 @@ cl_log_set_entity(const char *	entity)
 }
 
 void
+cl_log_set_syslogprefix(const char *prefix)
+{
+	if (prefix == NULL) {
+		prefix = DFLT_PREFIX;
+	}
+	strncpy(cl_log_syslogprefix, prefix, MAXENTITY);
+	cl_log_syslogprefix[MAXENTITY-1] = '\0';
+	if (syslog_enabled) {
+		syslog_enabled = 0;
+		cl_opensyslog();
+	}
+}
+
+void
 cl_log_set_logfile(const char *	path)
 {
-    if(path != NULL && strcasecmp("/dev/null", path) == 0) {
-	path = NULL;
-    }
+	if(path != NULL && strcasecmp("/dev/null", path) == 0) {
+		path = NULL;
+	}
 	logfile_name = path;
+	cl_log_close_log_files();
 }
 void
 cl_log_set_debugfile(const char * path)
 {
-    if(path != NULL && strcasecmp("/dev/null", path) == 0) {
-	path = NULL;
-    }
-    debugfile_name = path;
+	if(path != NULL && strcasecmp("/dev/null", path) == 0) {
+		path = NULL;
+	}
+	debugfile_name = path;
+	cl_log_close_log_files();
 }
 
 
@@ -476,23 +501,17 @@ prio2str(int priority)
 		}
 
 static char * syslog_timestamp(TIME_T t);
+static void cl_limit_log_update(struct msg_ctrl *ml, time_t ts);
 
 static void
-append_log( const char * fname, const char * entity, int entity_pid
+append_log(FILE * fp, const char * entity, int entity_pid
 ,	TIME_T timestamp, const char * pristr, const char * msg)
 {
-	FILE *			fp = fopen(fname,"a");
 	static int		got_uname = FALSE;
 	static struct utsname	un;
 
-	if (!fp) {
-		syslog(LOG_ERR, "Cannot append to %s: %s", fname
-		,	strerror(errno)); 
-		return;
-	}
 	if (!syslogformatfile) {
 		print_logline(fp, entity, entity_pid, timestamp, pristr, msg);
-		fclose(fp);
 		return;
 	}
 	if (!got_uname) {
@@ -507,7 +526,100 @@ append_log( const char * fname, const char * entity, int entity_pid
 	,	(pristr ? pristr : "")
 	,	(pristr ? ": " : "")
 	,	msg);
-	fclose(fp);
+}
+
+/* As performance optimization we try to keep the file descriptor
+ * open all the time, but as logrotation needs to work, the calling
+ * program actually needs a signal handler.
+ *
+ * To be able to keep files open even without signal handler,
+ * we remember the stat info, and close/reopen if the inode changed.
+ * We keep the number of stat() calls to one per file per minute.
+ * logrotate should be configured for delayed compression, if any.
+ */
+
+struct log_file_context {
+	FILE *fp;
+	struct stat stat_buf;
+};
+
+static struct log_file_context log_file, debug_file;
+
+static void close_log_file(struct log_file_context *lfc)
+{
+	/* ignore errors, we cannot do anything about them anyways */
+	fflush(lfc->fp);
+	fsync(fileno(lfc->fp));
+	fclose(lfc->fp);
+	lfc->fp = NULL;
+}
+
+void cl_log_close_log_files(void)
+{
+	if (log_file.fp)
+		close_log_file(&log_file);
+	if (debug_file.fp)
+		close_log_file(&debug_file);
+}
+
+static void maybe_close_log_file(const char *fname, struct log_file_context *lfc)
+{
+	struct stat buf;
+	if (!lfc->fp)
+		return;
+	if (stat(fname, &buf) || buf.st_ino != lfc->stat_buf.st_ino) {
+		close_log_file(lfc);
+		cl_log(LOG_INFO, "log-rotate detected on logfile %s", fname);
+	}
+}
+
+/* Default to unbuffered IO.  logd or others can use cl_log_use_buffered_io(1)
+ * to enable fully buffered mode, and then use fflush appropriately.
+ */
+static void open_log_file(const char *fname, struct log_file_context *lfc)
+{
+	lfc->fp = fopen(fname ,"a");
+	if (!lfc->fp) {
+		syslog(LOG_ERR, "Failed to open log file %s: %s\n" ,
+		       fname, strerror(errno));
+	} else {
+		setvbuf(lfc->fp, NULL,
+				use_buffered_io ? _IOFBF : _IONBF,
+				BUFSIZ);
+		fstat(fileno(lfc->fp), &lfc->stat_buf);
+	}
+}
+
+static void maybe_reopen_log_files(const char *log_fname, const char *debug_fname)
+{
+	static TIME_T last_stat_time;
+
+	if (log_file.fp || debug_file.fp) {
+		TIME_T now = time(NULL);
+		if (now - last_stat_time > 59) {
+			/* Don't use an exact minute, have it jitter around a
+			 * bit against cron or others.  Note that, if there
+			 * is no new log message, it can take much longer
+			 * than this to notice logrotation and actually close
+			 * our file handle on the possibly already rotated,
+			 * or even deleted.
+			 *
+			 * As long as at least one minute pases between
+			 * renaming the log file, and further processing,
+			 * no message will be lost, so this should do fine:
+			 * (mv ha-log ha-log.1; sleep 60; gzip ha-log.1)
+			 */
+			maybe_close_log_file(log_fname, &log_file);
+			maybe_close_log_file(debug_fname, &debug_file);
+			last_stat_time = now;
+		}
+	}
+
+	if (log_fname && !log_file.fp)
+		open_log_file(log_fname, &log_file);
+
+	if (debug_fname && !debug_file.fp)
+		open_log_file(debug_fname, &debug_file);
 }
 
 /*
@@ -524,49 +636,58 @@ cl_direct_log(int priority, const char* buf, gboolean use_priority_str,
 	const char *	pristr;
 	int	needprivs = !cl_have_full_privs();
 
-	if (entity == NULL){
-		entity =cl_log_entity;
-	}
-	
 	pristr = use_priority_str ? prio2str(priority) : NULL;
+	
+	if (!entity)
+		entity = *cl_log_entity	? cl_log_entity : DFLT_ENTITY;
 
 	if (needprivs) {
 		return_to_orig_privs();
 	}
 	
 	if (syslog_enabled) {
-		if (entity) {
-			strncpy(common_log_entity, entity, MAXENTITY);
-		} else {
-			strncpy(common_log_entity, DFLT_ENTITY,MAXENTITY);
-		}
+		snprintf(common_log_entity, MAXENTITY, "%s",
+			*cl_log_syslogprefix ? cl_log_syslogprefix : entity);
 
-		common_log_entity[MAXENTITY-1] = '\0';
-
-		if (pristr) {
-			syslog(priority, "[%d]: %s: %s%c",
-			       entity_pid, pristr,  buf, 0);
-		}else {
-			syslog(priority, "[%d]: %s%c", entity_pid, buf, 0);
-		}
+		/* The extra trailing '\0' is supposed to work around some
+		 * "known syslog bug that ends up concatinating entries".
+		 * Knowledge about which syslog package, version, platform and
+		 * what exactly the bug was has been lost, but leaving it in
+		 * won't do any harm either. */
+		syslog(priority, "%s[%d]: %s%s%s%c",
+			*cl_log_syslogprefix ? entity : "",
+			entity_pid,
+			pristr ?: "",  pristr ? ": " : "",
+			buf, 0);
 	}
 
-	if (debugfile_name != NULL) {
-		append_log(debugfile_name,entity,entity_pid,ts,pristr,buf);
-	}
+	maybe_reopen_log_files(logfile_name, debugfile_name);
 
-	if (priority != LOG_DEBUG && logfile_name != NULL) {
-		append_log(logfile_name,entity,entity_pid,ts,pristr,buf);
-	}
+	if (debug_file.fp)
+		append_log(debug_file.fp, entity, entity_pid, ts, pristr, buf);
+
+	if (priority != LOG_DEBUG && log_file.fp)
+		append_log(log_file.fp, entity, entity_pid, ts, pristr, buf);
 
 	if (needprivs) {
 		return_to_dropped_privs();
 	}
-	
 	return;
 }
 
-
+void cl_log_do_fflush(int do_fsync)
+{
+	if (log_file.fp) {
+		fflush(log_file.fp);
+		if (do_fsync)
+			fsync(fileno(log_file.fp));
+	}
+	if (debug_file.fp) {
+		fflush(debug_file.fp);
+		if (do_fsync)
+			fsync(fileno(debug_file.fp));
+	}
+}
 
 /*
  * This function can cost us realtime unless use_logging_daemon
@@ -616,6 +737,116 @@ cl_log(int priority, const char * fmt, ...)
 	
 	cl_log_depth--;
 	return;
+}
+
+/*
+ * Log a message only if there were not too many messages of this
+ * kind recently. This is too prevent log spamming in case a
+ * condition persists over a long period of time. The maximum
+ * number of messages for the timeframe and other details are
+ * provided in struct logspam (see cl_log.h).
+ *
+ * Implementation details:
+ * - max number of time_t slots is allocated; slots keep time
+ *   stamps of previous max number of messages
+ * - we check if the difference between now (i.e. new message just
+ *   arrived) and the oldest message is _less_ than the window
+ *   timeframe
+ * - it's up to the user to do cl_limit_log_new and afterwards
+ *   cl_limit_log_destroy, though the latter is usually not
+ *   necessary; the memory allocated with cl_limit_log_new stays
+ *   constant during the lifetime of the process
+ *
+ * NB on Thu Aug  4 15:26:49 CEST 2011:
+ * This interface is very new, use with caution and report bugs.
+ */
+
+struct msg_ctrl *
+cl_limit_log_new(struct logspam *lspam)
+{
+	struct msg_ctrl *ml;
+
+	ml = (struct msg_ctrl *)malloc(sizeof(struct msg_ctrl));
+	if (!ml) {
+		cl_log(LOG_ERR, "%s:%d: out of memory"
+			, __FUNCTION__, __LINE__);
+		return NULL;
+	}
+	ml->msg_slots = (time_t *)calloc(lspam->max, sizeof(time_t));
+	if (!ml->msg_slots) {
+		cl_log(LOG_ERR, "%s:%d: out of memory"
+			, __FUNCTION__, __LINE__);
+		return NULL;
+	}
+	ml->lspam = lspam;
+	cl_limit_log_reset(ml);
+	return ml; /* to be passed later to cl_limit_log() */
+}
+
+void
+cl_limit_log_destroy(struct msg_ctrl *ml)
+{
+	if (!ml)
+		return;
+	g_free(ml->msg_slots);
+	g_free(ml);
+}
+
+void
+cl_limit_log_reset(struct msg_ctrl *ml)
+{
+	ml->last = -1;
+	ml->cnt = 0;
+	ml->suppress_t = (time_t)0;
+	memset(ml->msg_slots, 0, ml->lspam->max * sizeof(time_t));
+}
+
+static void
+cl_limit_log_update(struct msg_ctrl *ml, time_t ts)
+{
+	ml->last = (ml->last + 1) % ml->lspam->max;
+	*(ml->msg_slots + ml->last) = ts;
+	if (ml->cnt < ml->lspam->max)
+		ml->cnt++;
+}
+
+void
+cl_limit_log(struct msg_ctrl *ml, int priority, const char * fmt, ...)
+{
+	va_list ap;
+	char buf[MAXLINE];
+	time_t last_ts, now = time(NULL);
+
+	if (!ml)
+		goto log_msg;
+	if (ml->suppress_t) {
+		if ((now - ml->suppress_t) < ml->lspam->reset_time)
+			return;
+		/* message blocking expired */
+		cl_limit_log_reset(ml);
+	}
+	last_ts = ml->last != -1 ? *(ml->msg_slots + ml->last) : (time_t)0;
+	if (
+		ml->cnt < ml->lspam->max || /* not so many messages logged */
+		(now - last_ts) > ml->lspam->window /* messages far apart */
+	) {
+		cl_limit_log_update(ml, now);
+		goto log_msg;
+	} else {
+		cl_log(LOG_INFO
+			, "'%s' messages logged too often, "
+			"suppressing messages of this kind for %ld seconds"
+			, ml->lspam->id, ml->lspam->reset_time);
+		cl_log(priority, "%s", ml->lspam->advice);
+		ml->suppress_t = now;
+		return;
+	}
+
+log_msg:
+	va_start(ap, fmt);
+	vsnprintf(buf, MAXLINE, fmt, ap);
+	va_end(ap);
+	cl_log(priority, "%s", buf);
 }
 
 void
@@ -712,7 +943,7 @@ ha_timestamp(TIME_T t)
 }
 
 
-int
+static int
 cl_set_logging_wqueue_maxlen(int qlen)
 {
 	int sendrc;
@@ -783,6 +1014,10 @@ LogToLoggingDaemon(int priority, const char * buf,
 	int			sendrc = IPC_FAIL;
 	int			intval = conn_logd_time;
 	
+	/* make sure we don't hold file descriptors open
+	 * we don't intend to use again */
+	cl_log_close_log_files();
+
 	if (chan == NULL) {
 		longclock_t	lnow = time_longclock();
 		
@@ -875,7 +1110,7 @@ LogToLoggingDaemon(int priority, const char * buf,
 }
 
 
-gboolean
+static gboolean
 send_dropped_message(gboolean use_pri_str, IPC_Channel *chan)
 {
 	int sendrc;
@@ -903,26 +1138,7 @@ send_dropped_message(gboolean use_pri_str, IPC_Channel *chan)
 }
 
 
-
-
-static int childlog_ipcmsg_allocated = 0;
-static int childlog_ipcmsg_freed = 0;
-void	childlog_dump_ipcmsg_stats(void);
-void
-childlog_dump_ipcmsg_stats(void)
-{
-	
-	cl_log(LOG_INFO, "childlog ipcmsg allocated:%d, freed=%d, diff =%d",
-	       childlog_ipcmsg_allocated,
-	       childlog_ipcmsg_freed,
-	       childlog_ipcmsg_allocated - childlog_ipcmsg_freed);
-	
-	return;
-	
-	
-}
-
-IPC_Message*
+static IPC_Message*
 ChildLogIPCMessage(int priority, const char *buf, int bufstrlen, 
 		   gboolean use_prio_str, IPC_Channel* ch)
 {
@@ -981,13 +1197,11 @@ ChildLogIPCMessage(int priority, const char *buf, int bufstrlen,
 	ret->msg_done = FreeChildLogIPCMessage;
 	ret->msg_ch = ch;
 
-	childlog_ipcmsg_allocated++;
-
 	return ret;
 }
 
 
-void
+static void
 FreeChildLogIPCMessage(IPC_Message* msg)
 {
 	if (msg == NULL) {
@@ -998,9 +1212,7 @@ FreeChildLogIPCMessage(IPC_Message* msg)
 	
 	memset(msg, 0, sizeof (*msg));
 	free(msg);
-	
-	childlog_ipcmsg_freed ++;
-	
+		
 	return;
 
 }
@@ -1016,120 +1228,6 @@ cl_opensyslog(void)
 	syslog_enabled = 1;
 	strncpy(common_log_entity, cl_log_entity, MAXENTITY);
 	openlog(common_log_entity, LOG_CONS, cl_log_facility);
-}
-
-/* What a horrible substitute for a low-overhead event log!! - FIXME!! */
-
-CircularBuffer_t *
-NewCircularBuffer(const char *name, uint size, gboolean empty_after_dump)
-{
-	CircularBuffer_t *buffer = malloc(sizeof(CircularBuffer_t));
-	if (!buffer) {
-		return buffer;
-	}
-	buffer->name = name;
-	buffer->size = size;
-	buffer->empty_after_dump = empty_after_dump;
-	buffer->queue = g_queue_new();
-
-#if 1
-	if(empty_after_dump == FALSE) {
-		cl_log(LOG_ERR, "This requires glib 2.4");
-		empty_after_dump = TRUE;
-	}
-#endif
-
-	return buffer;
-}
-
-void
-LogToCircularBuffer(CircularBuffer_t *buffer, int level, const char *fmt, ...)
-{
-	va_list ap;
-	char buf[MAXLINE];
-	int	nbytes;
-	CircularBufferEntry_t *entry = malloc(sizeof(CircularBufferEntry_t));
-	
-	if (!entry) {
-		return;
-	}
-	va_start(ap, fmt);
-	nbytes=vsnprintf(buf, MAXLINE, fmt, ap);
-	/*	nbytes=vasprintf(&buf, fmt, ap); */
-	va_end(ap);
-
-	entry->buf = buf;
-	entry->level = level;
-
-	g_queue_push_tail(buffer->queue, entry);
-
-	while(buffer->queue->length > buffer->size) {
-		entry = g_queue_pop_head(buffer->queue);
-		free(entry->buf);
-		free(entry);
-	}
-}
-
-void
-EmptyCircularBuffer(CircularBuffer_t *buffer) 
-{
-	CircularBufferEntry_t *entry = NULL;
-	while(buffer->queue->length > 0) {
-		entry = g_queue_pop_head(buffer->queue);
-		free(entry->buf);
-		free(entry);
-	}
-}
-
-gboolean
-DumpCircularBuffer(int nsig, gpointer user_data) 
-{
-	CircularBuffer_t *buffer = user_data;
-	CircularBufferEntry_t *entry = NULL;
-	
-	if(buffer == NULL) {
-		/* error */
-		cl_log(LOG_ERR, "No buffer supplied to dump.");
-		return FALSE;
-	}
-
-	if(logging_daemon_chan != NULL
-	   && logging_daemon_chan->send_queue->max_qlen < buffer->size) {
-		/* We have no hope of getting the whole buffer out via the
-		 *  logging daemon.  Use direct log instead so the messages
-		 *  come out in the right order.
-		 */ 
-		cl_log_depth++;
-	}
-	
-	cl_log(LOG_INFO, "Mark: Begin dump of buffer %s", buffer->name);
-	if(buffer->empty_after_dump) {
-		while(buffer->queue->length > 0) {
-			entry = g_queue_pop_head(buffer->queue);
-			cl_log(entry->level, "%s", entry->buf);
-			free(entry->buf);
-			free(entry);
-		}
-
-	} else {
-#if 1
-		cl_log(LOG_ERR, "This requires g_queue_peek_nth() from glib 2.4");
-#else
-		uint lpc = 0;
-		uint queue_len = buffer->queue->length;
-		for(lpc = 0; lpc < queue_len; lpc++) {
-			entry = g_queue_peek_nth(buffer->queue, lpc);
-			cl_log(entry->level, "%s", entry->buf);
-		}
-#endif
-	}
-	if(logging_daemon_chan != NULL
-	   && logging_daemon_chan->send_queue->max_qlen < buffer->size) {
-		/* Return is back to normal */
-		cl_log_depth--;
-	}
-	cl_log(LOG_INFO, "Mark: End dump of buffer %s", buffer->name);
-	return TRUE;
 }
 
 

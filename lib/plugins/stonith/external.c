@@ -46,7 +46,7 @@
 static StonithPlugin *	external_new(const char *);
 static void		external_destroy(StonithPlugin *);
 static int		external_set_config(StonithPlugin *, StonithNVpair *);
-static const char**	external_get_confignames(StonithPlugin *);
+static const char * const *	external_get_confignames(StonithPlugin *);
 static const char *	external_getinfo(StonithPlugin * s, int InfoType);
 static int		external_status(StonithPlugin * );
 static int		external_reset_req(StonithPlugin * s, int request, const char * host);
@@ -141,7 +141,7 @@ external_status(StonithPlugin  *s)
 	
 	rc = external_run_cmd(sd, op, NULL);
 	if (rc != 0) {
-		LOG(PIL_CRIT, "%s: '%s %s' failed with rc %d",
+		LOG(PIL_WARN, "%s: '%s %s' failed with rc %d",
 			__FUNCTION__, sd->subplugin, op, rc);
 	}
 	else {
@@ -337,6 +337,10 @@ external_parse_config_info(struct pluginDevice* sd, StonithNVpair * info)
 	/* TODO: Maybe treat "" as delimeters too so
 	 * whitespace can be passed to the plugins... */
 	for (nv = info; nv->s_name; nv++) {
+		if (!nv->s_name || !nv->s_value) {
+			continue;
+		}
+
 		key = STRDUP(nv->s_name);
 		if (!key) {
 			goto err_mem;
@@ -415,7 +419,7 @@ external_set_config(StonithPlugin* s, StonithNVpair *list)
 
 		for (p = sd->confignames; *p; p++) {
 			if (OurImports->GetValue(list, *p) == NULL) {
-				LOG(PIL_INFO, "Cannot get parameter %s from "
+				LOG(PIL_DEBUG, "Cannot get parameter %s from "
 					"StonithNVpair", *p);
 			}
 		}
@@ -457,7 +461,7 @@ exec_select(const struct dirent *dire)
 /*
  * Return STONITH config vars
  */
-static const char**
+static const char * const *
 external_get_confignames(StonithPlugin* p)
 {
   	struct pluginDevice *	sd;
@@ -540,7 +544,7 @@ external_get_confignames(StonithPlugin* p)
 		sd->confignames[dircount] = NULL;
 	}
 
-	return (const char **)sd->confignames;
+	return (const char * const *)sd->confignames;
 }
 
 /*
@@ -702,7 +706,7 @@ external_run_cmd(struct pluginDevice *sd, const char *op, char **output)
 	const int		BUFF_LEN=4096;
 	char			buff[BUFF_LEN];
 	int			read_len = 0;
-	int			rc;
+	int			status, rc;
 	char * 			data = NULL;
 	FILE *			file;
 	char			cmd[FILENAME_MAX+64];
@@ -750,11 +754,13 @@ external_run_cmd(struct pluginDevice *sd, const char *op, char **output)
 
 	/* external plugins need path to ha_log.sh */
 	path = getenv("PATH");
-	new_path_len = strlen(path)+strlen(GLUE_SHARED_DIR)+2;
-	new_path = (char *)g_malloc(new_path_len);
-	snprintf(new_path, new_path_len, "%s:%s", path, GLUE_SHARED_DIR);
-	setenv("PATH", new_path, 1);
-	g_free(new_path);
+	if (strncmp(GLUE_SHARED_DIR,path,strlen(GLUE_SHARED_DIR))) {
+		new_path_len = strlen(path)+strlen(GLUE_SHARED_DIR)+2;
+		new_path = (char *)g_malloc(new_path_len);
+		snprintf(new_path, new_path_len, "%s:%s", GLUE_SHARED_DIR, path);
+		setenv("PATH", new_path, 1);
+		g_free(new_path);
+	}
 
 	/* set the logtag appropriately */
 	logtag_len = strlen(PIL_PLUGIN_S)+strlen(sd->subplugin)+2;
@@ -811,9 +817,25 @@ external_run_cmd(struct pluginDevice *sd, const char *op, char **output)
 		goto out;
 	}
 
-	rc = pclose(file);
-	if (rc != 0) {
-		LOG(PIL_INFO, "%s: Calling '%s' returned %d", __FUNCTION__, cmd, rc);
+	status = pclose(file);
+	if (WIFEXITED(status)) {
+		rc = WEXITSTATUS(status);
+		if (rc != 0 && Debug) {
+			LOG(PIL_DEBUG,
+				"%s: Calling '%s' returned %d", __FUNCTION__, cmd, rc);
+		}
+	} else {
+		if (WIFSIGNALED(status)) {
+			LOG(PIL_CRIT, "%s: '%s' got signal %d",
+				__FUNCTION__, cmd, WTERMSIG(status));
+		} else if (WIFSTOPPED(status)) {
+			LOG(PIL_INFO, "%s: '%s' stopped with signal %d",
+				__FUNCTION__, cmd, WSTOPSIG(status));
+		} else {
+			LOG(PIL_CRIT, "%s: '%s' exited abnormally (core dumped?)",
+				__FUNCTION__, cmd);
+		}
+		rc = -1;
 	}
 	if (Debug && output && data) {
 		LOG(PIL_DEBUG, "%s: '%s' output: %s", __FUNCTION__, cmd, data);

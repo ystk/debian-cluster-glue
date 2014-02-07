@@ -232,6 +232,7 @@ static struct IPC_CHANNEL* socket_server_channel_new(int sockfd);
 
 static struct IPC_CHANNEL * channel_new(int sockfd, int conntype, const char *pathname);
 static int client_channel_new_auth(int sockfd);
+static int verify_creds(struct IPC_AUTH *auth_info, uid_t uid, gid_t gid);
 
 typedef void (*DelProc)(IPC_Message*);
 
@@ -1116,7 +1117,6 @@ socket_recv(struct IPC_CHANNEL * ch, struct IPC_MESSAGE** message)
 
 	int		nbytes;
 	int		result;
-	struct IPC_MESSAGE* ipcmsg;
 
 	socket_resume_io(ch);
 	result = socket_resume_io_read(ch, &nbytes, TRUE);
@@ -1137,12 +1137,10 @@ socket_recv(struct IPC_CHANNEL * ch, struct IPC_MESSAGE** message)
 		ch->recv_queue->current_qlen = 0;
 		return IPC_FAIL;
 	}
-	ipcmsg = *message = (struct IPC_MESSAGE *) (element->data);
-	
-	
-#ifdef IPC_TIME_DEBUG		
-	ipc_time_debug(ch, ipcmsg, MSGPOS_DEQUEUE);	
-#endif	
+	*message = (struct IPC_MESSAGE *) (element->data);
+#ifdef IPC_TIME_DEBUG
+	ipc_time_debug(ch, *message, MSGPOS_DEQUEUE);
+#endif
 
 	CHECKFOO(1,ch, *message, SavedReadBody, "read message");
 	SocketIPCStats.nreceived++;
@@ -1715,6 +1713,39 @@ socket_get_send_fd(struct IPC_CHANNEL *ch)
 	return socket_get_recv_fd(ch);
 }
 
+static void
+socket_adjust_buf(struct IPC_CHANNEL *ch, int optname, unsigned q_len)
+{
+	const char *direction = optname == SO_SNDBUF ? "snd" : "rcv";
+	int fd = socket_get_send_fd(ch);
+	unsigned byte;
+
+	/* Arbitrary scaling.
+	 * DEFAULT_MAX_QLEN is 64, default socket buf is often 64k to 128k,
+	 * at least on those linux I checked.
+	 * Keep that ratio, and allow for some overhead. */
+	if (q_len == 0)
+		/* client does not want anything,
+		 * reduce system buffers as well */
+		byte = 4096;
+	else if (q_len < 512)
+		byte = (32 + q_len) * 1024;
+	else
+		byte = q_len * 1024;
+
+	if (0 == setsockopt(fd, SOL_SOCKET, optname, &byte, sizeof(byte))) {
+		if (debug_level > 1) {
+			cl_log(LOG_DEBUG, "adjusted %sbuf size to %u",
+					direction, byte);
+		}
+	} else {
+		/* If this fails, you may need to adjust net.core.rmem_max,
+		 * ...wmem_max, or equivalent */
+		cl_log(LOG_WARNING, "adjust %sbuf size to %u failed: %s",
+			direction, byte, strerror(errno));
+	}
+}
+
 static int
 socket_set_send_qlen (struct IPC_CHANNEL* ch, int q_len)
 {
@@ -1722,9 +1753,9 @@ socket_set_send_qlen (struct IPC_CHANNEL* ch, int q_len)
   if (ch->send_queue == NULL) {
     return IPC_FAIL;
   }
+  socket_adjust_buf(ch, SO_SNDBUF, q_len);
   ch->send_queue->max_qlen = q_len;
-  return IPC_OK;  
- 
+  return IPC_OK;
 }
 
 static int
@@ -1734,7 +1765,7 @@ socket_set_recv_qlen (struct IPC_CHANNEL* ch, int q_len)
   if (ch->recv_queue == NULL) {
     return IPC_FAIL;
   }
-  
+  socket_adjust_buf(ch, SO_RCVBUF, q_len);
   ch->recv_queue->max_qlen = q_len;
   return IPC_OK;
 }
@@ -2326,6 +2357,26 @@ socket_message_new(struct IPC_CHANNEL *ch, int msg_len)
  *
  ***********************************************************************/
 
+static int
+verify_creds(struct IPC_AUTH *auth_info, uid_t uid, gid_t gid)
+{
+	int ret = IPC_FAIL;
+
+	if (!auth_info || (!auth_info->uid && !auth_info->gid)) {
+		return IPC_OK;
+	}
+	if (	auth_info->uid
+	&&	(g_hash_table_lookup(auth_info->uid
+		,	GUINT_TO_POINTER((guint)uid)) != NULL)) {
+		ret = IPC_OK;
+	}else if (auth_info->gid
+	&&	(g_hash_table_lookup(auth_info->gid
+		,	GUINT_TO_POINTER((guint)gid)) != NULL)) {
+		ret = IPC_OK;
+  	}
+	return ret;
+}
+
 
 /***********************************************************************
  * SO_PEERCRED VERSION... (Linux)
@@ -2373,16 +2424,7 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
 
   
 	/* verify the credential information. */
-	if (	auth_info->uid
-	&&	(g_hash_table_lookup(auth_info->uid
-		,	GUINT_TO_POINTER((guint)cred.uid)) != NULL)) {
-		ret = IPC_OK;
-	}else if (auth_info->gid
-	&&	(g_hash_table_lookup(auth_info->gid
-		,	GUINT_TO_POINTER((guint)cred.gid)) != NULL)) {
-		ret = IPC_OK;
-  	}
-	return ret;
+	return verify_creds(auth_info, cred.uid, cred.gid);
 }
 
 /* get farside pid for our peer process */
@@ -2441,22 +2483,9 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
 
 	ch->farside_uid = euid;
 	ch->farside_gid = egid;
-	if (ret == IPC_OK) {
-		return ret;
-	}
 
-	/* Check credentials against authorization information */
-
-	if (	auth_info->uid
-	&&	(g_hash_table_lookup(auth_info->uid
-		,	GUINT_TO_POINTER((guint)euid)) != NULL)) {
-		ret = IPC_OK;
-	}else if (auth_info->gid
-	&&	(g_hash_table_lookup(auth_info->gid
-		,	GUINT_TO_POINTER((guint)egid)) != NULL)) {
-		ret = IPC_OK;
-  	}
-	return ret;
+	/* verify the credential information. */
+	return verify_creds(auth_info, euid, egid);
 }
 
 static
@@ -2595,18 +2624,8 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
       return ret;
   }
 
-  ret = IPC_OK;
-
-  if (	auth_info->uid
-  &&	g_hash_table_lookup(auth_info->uid, &(cred.crEuid)) == NULL) {
-		ret = IPC_FAIL;
-  }
-  if (	auth_info->gid
-  &&	g_hash_table_lookup(auth_info->gid, &(cred.crEgid)) == NULL) {
-		ret = IPC_FAIL;
-  }
-
-  return ret;
+  /* verify the credential information. */
+  return verify_creds(auth_info, cred.crEuid, cred.crEgid);
 }
 
 /*
@@ -2688,8 +2707,6 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
 		return ret;
 	}
 
-	ret = IPC_OK;
-
 	if ((auth_info->uid == NULL || g_hash_table_size(auth_info->uid) == 0)
 	    && auth_info->gid != NULL
 	    && g_hash_table_size(auth_info->gid) != 0) {
@@ -2698,20 +2715,9 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
 		       " on this platform.");
 		return IPC_BROKEN;
 	}
-	
-	if (auth_info->uid != NULL && g_hash_table_size(auth_info->uid) > 0
-	    && g_hash_table_lookup(
-		    auth_info->uid, GUINT_TO_POINTER(stat_buf.st_uid))==NULL) {
-		ret = IPC_FAIL;
-		
-	}
-	if (auth_info->gid != NULL && g_hash_table_size(auth_info->gid) > 0
-	    && g_hash_table_lookup(
-		    auth_info->gid, GUINT_TO_POINTER(stat_buf.st_gid))==NULL) {
-		ret = IPC_FAIL;
-	}
 
-	return ret;
+	/* verify the credential information. */
+	return verify_creds(auth_info, stat_buf.st_uid, stat_buf.st_gid);
 }
 
 
@@ -2741,22 +2747,9 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
 	ch->farside_uid = conn_info->farside_uid;
 	ch->farside_gid = conn_info->farside_gid;
 
-	if (auth_info == NULL
-	  || (auth_info->uid == NULL && auth_info->gid == NULL)) {
-		return IPC_OK;	/* no restriction for authentication */
-	}
-
 	/* verify the credential information. */
-	if (	auth_info->uid
-	&&	(g_hash_table_lookup(auth_info->uid,
-		  GUINT_TO_POINTER((guint)conn_info->farside_uid)) != NULL)) {
-		return IPC_OK;
-	}else if (auth_info->gid
-	&&	(g_hash_table_lookup(auth_info->gid,
-		  GUINT_TO_POINTER((guint)conn_info->farside_gid)) != NULL)) {
-		return IPC_OK;
-	}
-	return IPC_FAIL;
+	return verify_creds(auth_info,
+		conn_info->farside_uid, conn_info->farside_gid);
 }
 
 static
@@ -2802,20 +2795,10 @@ socket_verify_auth(struct IPC_CHANNEL* ch, struct IPC_AUTH * auth_info)
 		return rc;
 	}
 
-	/* Check credentials against authorization information */
-
-	if (auth_info->uid
-	  && (g_hash_table_lookup(auth_info->uid,
-		  GUINT_TO_POINTER((guint)ucred_geteuid(ucred))) != NULL)) {
-		rc = IPC_OK;
-	}else if (auth_info->gid
-	  && (g_hash_table_lookup(auth_info->gid,
-		  GUINT_TO_POINTER((guint)ucred_getegid(ucred))) != NULL)) {
-		rc = IPC_OK;
-  	}
-
+	/* verify the credential information. */
+	rc = verify_creds(auth_info,
+		ucred_geteuid(ucred), ucred_getegid(ucred));
 	ucred_free(ucred);
-
 	return rc;
 }
 

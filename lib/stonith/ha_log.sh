@@ -2,7 +2,7 @@
 #
 #
 # 	ha_log.sh for stonith external plugins
-#	(equivalent to ocf_log in .ocf-shellfuncs in resource-agents)
+#	(equivalent to ocf_log in ocf-shellfuncs in resource-agents)
 #
 # Copyright (c) 2004 SUSE LINUX AG, Lars Marowsky-Brée
 #                    All Rights Reserved.
@@ -83,7 +83,7 @@ ha_log() {
 $msg
 EOF
 
-	if [ -n "$HA_LOGFACILITY" ]; then
+	if [ -n "$HA_LOGFACILITY" -a "$HA_LOGFACILITY" != none ]; then
 		logger -t "$HA_LOGTAG" -p $HA_LOGFACILITY.$loglevel "$msg"
 	fi	
 	dest=${HA_LOGFILE:-$HA_DEBUGLOG}

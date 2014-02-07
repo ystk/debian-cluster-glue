@@ -29,7 +29,7 @@
 
 Name:           cluster-glue
 Summary:        Reusable cluster components
-Version:        1.0.6
+Version:        1.0.9
 Release:        1%{?dist}
 License:        GPL v2 or later; LGPL v2.1 or later
 Url:            http://www.linux-ha.org/wiki/Cluster_Glue
@@ -206,6 +206,7 @@ fi
 %{_sbindir}/ha_logger
 %{_sbindir}/hb_report
 %{_sbindir}/lrmadmin
+%{_sbindir}/cibsecret
 %{_sbindir}/meatclient
 %{_sbindir}/stonith
 %{_sbindir}/sbd

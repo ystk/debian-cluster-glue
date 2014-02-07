@@ -168,12 +168,9 @@ size_t
 string_list_pack_length(const GList* _list)
 {
 	size_t i;
-	GList* list = NULL;
+	GList* list = UNCONST_CAST_POINTER(GList *, _list);
 	size_t total_length = 0;
 	
-	memcpy(&list, &_list, sizeof(GList*));
-	(void)list;
-
 	if (list == NULL){
 		cl_log(LOG_WARNING, "string_list_pack_length():"
 		       "list is NULL");
@@ -438,16 +435,14 @@ list_copy(const GList* _list)
 {
 	size_t i;
 	GList* newlist = NULL;
-	GList* list;
-
-	memcpy(&list, &_list, sizeof(GList*));
+	GList* list = UNCONST_CAST_POINTER(GList *, _list);
 
 	for (i = 0; i < g_list_length(list); i++){
 		char* dup_element = NULL;
 		char* element = g_list_nth_data(list, i);
 		int len;
 		if (element == NULL){
-			cl_log(LOG_WARNING, "list_cleanup:"
+			cl_log(LOG_WARNING, "list_copy:"
 			       "element is NULL");
 			continue;
 		}
@@ -936,7 +931,6 @@ add_struct_field(struct ha_msg* msg, char* name, size_t namelen,
 		 void* value, size_t vallen, int depth)
 {	
 	int next;
-	struct ha_msg* childmsg;
 
 	if ( !msg || !name || !value
 	     || depth < 0){
@@ -944,8 +938,6 @@ add_struct_field(struct ha_msg* msg, char* name, size_t namelen,
 		       " invalid input argument");
 		return HA_FAIL;
 	}
-	
-	childmsg = (struct ha_msg*)value; 
 	
 	next = msg->nfields;
 	msg->names[next] = name;
@@ -969,7 +961,6 @@ add_list_field(struct ha_msg* msg, char* name, size_t namelen,
 	int next;
 	int j;
 	GList* list = NULL;
-	int stringlen_add;
 
 	if ( !msg || !name || !value
 	     || namelen <= 0 
@@ -988,13 +979,8 @@ add_list_field(struct ha_msg* msg, char* name, size_t namelen,
 	}
 	
 	if ( j >= msg->nfields){
-		int listlen;
 		list = (GList*)value;
 
-		listlen = string_list_pack_length(list);
-
-		stringlen_add = list_stringlen(namelen,listlen , value);
-		
 		next = msg->nfields;
 		msg->names[next] = name;
 		msg->nlens[next] = namelen;
@@ -1006,8 +992,7 @@ add_list_field(struct ha_msg* msg, char* name, size_t namelen,
 	}  else if(  msg->types[j] == FT_LIST ){
 
 		GList* oldlist = (GList*) msg->values[j];
-		int oldlistlen = string_list_pack_length(oldlist);
-		int newlistlen;
+		int listlen;
 		size_t i; 
 		
 		for ( i =0; i < g_list_length((GList*)value); i++){
@@ -1019,12 +1004,10 @@ add_list_field(struct ha_msg* msg, char* name, size_t namelen,
 			return HA_FAIL;
 		}
 		
-		newlistlen = string_list_pack_length(list);		
+		listlen = string_list_pack_length(list);		
 		
-		stringlen_add = newlistlen - oldlistlen;
-
 		msg->values[j] = list;
-		msg->vlens[j] =  string_list_pack_length(list);
+		msg->vlens[j] = listlen;
 		g_list_free((GList*)value); /*we don't free each element
 					      because they are used in new list*/
 		free(name); /* this name is no longer necessary
@@ -1074,7 +1057,6 @@ add_uncompress_field(struct ha_msg* msg, char* name, size_t namelen,
 		 void* value, size_t vallen, int depth)
 {	
 	int next;
-	struct ha_msg* childmsg;
 
 	if ( !msg || !name || !value
 	     || depth < 0){
@@ -1082,8 +1064,6 @@ add_uncompress_field(struct ha_msg* msg, char* name, size_t namelen,
 		       " invalid input argument");
 		return HA_FAIL;
 	}
-	
-	childmsg = (struct ha_msg*)value; 
 	
 	next = msg->nfields;
 	msg->names[next] = name;
@@ -1538,7 +1518,6 @@ add_string_field(struct ha_msg* msg, char* name, size_t namelen,
 	size_t	cp_vallen;
 	void	*cp_value = NULL;
 	int	next;
-	int	stringlen_add = 0 ;
 
 	if ( !msg || !name || !value
 	     || namelen <= 0 
@@ -1598,8 +1577,8 @@ add_string_field(struct ha_msg* msg, char* name, size_t namelen,
 		}
 		
 		fieldstringlen = fieldtypefuncs[internal_type].stringlen;
-		if (!fieldstringlen || (stringlen_add = 
-					fieldstringlen(cp_namelen, cp_vallen, cp_value)) <= 0 ){
+		if (!fieldstringlen ||
+					fieldstringlen(cp_namelen, cp_vallen, cp_value) <= 0 ){
 			
 			cl_log(LOG_ERR, "add_string_field: stringlen failed");
 			return HA_FAIL;

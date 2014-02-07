@@ -19,9 +19,9 @@ dnl     checks for compiler characteristics
 dnl     checks for library functions
 dnl     checks for system services
 
-AC_INIT(cluster-glue, 1.0.6, linux-ha-dev@lists.linux-ha.org)
+AC_INIT(cluster-glue, 1.0.9, linux-ha-dev@lists.linux-ha.org)
 
-PKG_FEATURES=""
+FEATURES=""
 HB_PKG=heartbeat
 
 AC_CONFIG_AUX_DIR(.)
@@ -79,6 +79,7 @@ AC_CHECK_SIZEOF(short)
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(long long)
+AC_CHECK_SIZEOF(clock_t, [], [#include <sys/times.h>])
 AC_STRUCT_TIMEZONE
 
 dnl ===============================================
@@ -128,6 +129,10 @@ AC_ARG_ENABLE([thread-safe],
 AC_ARG_ENABLE([bundled-ltdl],
 [  --enable-bundled-ltdl  Configure, build and install the standalone ltdl library bundled with ${PACKAGE} [default=no]]) 
 LTDL_LIBS=""
+
+AC_ARG_ENABLE([upstart],
+AS_HELP_STRING([--enable-upstart],
+               [Enable Upstart support in lrmd. [default=no]]))
 
 INITDIR=""
 AC_ARG_WITH(initdir,
@@ -388,6 +393,14 @@ HA_COREDIR="${localstatedir}/lib/heartbeat/cores"
 AC_DEFINE_UNQUOTED(HA_COREDIR,"$HA_COREDIR", top directory of area to drop core files in)
 AC_SUBST(HA_COREDIR)
 
+LRM_VARLIBDIR="${localstatedir}/lib/heartbeat/lrm"
+AC_DEFINE_UNQUOTED(LRM_VARLIBDIR,"$LRM_VARLIBDIR", LRM directory)
+AC_SUBST(LRM_VARLIBDIR)
+
+LRM_CIBSECRETS="${localstatedir}/lib/heartbeat/lrm/secrets"
+AC_DEFINE_UNQUOTED(LRM_CIBSECRETS,"$LRM_CIBSECRETS", CIB secrets location)
+AC_SUBST(LRM_CIBSECRETS)
+
 AC_DEFINE_UNQUOTED(PILS_BASE_PLUGINDIR,"$libdir/heartbeat/plugins", Default plugin search path)
 AC_DEFINE_UNQUOTED(HA_PLUGIN_DIR,"$libdir/heartbeat/plugins", Where to find plugins)
 AC_DEFINE_UNQUOTED(LRM_PLUGIN_DIR,"$libdir/heartbeat/plugins/RAExec", Where to find LRM plugins)
@@ -440,19 +453,6 @@ fi
 AC_DEFINE_UNQUOTED(GLUE_BUILD_VERSION, "$GLUE_BUILD_VERSION", Build version)
 AC_MSG_RESULT($GLUE_BUILD_VERSION)
 AC_SUBST(GLUE_BUILD_VERSION)
-
-
-dnl check if there are getpid() inconsistency
-dnl	Note: reduce LIBS; in particular, ltdl can cause confusion.
-dnl	Possibly better:  move 'LIBS="$LIBS -lltdl"' from above to beyond here.
-dnl
-AC_MSG_CHECKING(for getpid() consistency in multi-process/threads program)
-ac_save_LIBS=$LIBS
-LIBS="-lpthread"
-AC_TRY_RUN(`cat $srcdir/config/pidtest.c`, 
-AC_MSG_RESULT(ok), 
-[AC_MSG_RESULT(fail); AC_DEFINE(GETPID_INCONSISTENT, 1 , [pid inconsistent])],)
-LIBS=$ac_save_LIBS
 
 dnl check byte order
 AC_MSG_CHECKING(for byteorder)
@@ -533,7 +533,7 @@ fi
 
 AM_CONDITIONAL(BUILD_HELP, test x"${HELP2MAN}" != x"")
 if test x"${HELP2MAN}" != x""; then
-   PKG_FEATURES="$PKG_FEATURES manpages"
+   FEATURES="$FEATURES manpages"
 fi
 
 dnl ===============================================
@@ -639,7 +639,11 @@ AC_CHECK_HEADERS(getopt.h)
 AC_CHECK_HEADERS(glib.h)
 AC_CHECK_HEADERS(grp.h)
 AC_CHECK_HEADERS(limits.h)
-AC_CHECK_HEADERS(linux/errqueue.h)
+AC_CHECK_HEADERS(linux/errqueue.h,,,
+	[#ifdef HAVE_LINUX_TYPES_H
+	 # include <linux/types.h>
+	 #endif
+	])
 AC_CHECK_HEADERS(malloc.h)
 AC_CHECK_HEADERS(netdb.h)
 AC_CHECK_HEADERS(netinet/in.h)
@@ -711,6 +715,18 @@ AC_TRY_COMPILE([
 ac_cv_HAVE_SYSLOG_FACILITYNAMES=yes,ac_cv_HAVE_SYSLOG_FACILITYNAMES=no,ac_cv_HAVE_SYSLOG_FACILITYNAMES=cross)])
 if test x"$ac_cv_HAVE_SYSLOG_FACILITYNAMES" = x"yes"; then
     AC_DEFINE(HAVE_SYSLOG_FACILITYNAMES,1,[ ])
+fi
+
+dnl Check for POSIX signals
+dnl
+AC_CACHE_CHECK([have POSIX signals],ac_cv_HAVE_POSIX_SIGNALS,[
+AC_TRY_COMPILE([
+#include <signal.h>
+],
+[ struct sigaction act, oact; sigaction(0, &act, &oact); return 0;],
+ac_cv_HAVE_POSIX_SIGNALS=yes,ac_cv_HAVE_POSIX_SIGNALS=no,ac_cv_HAVE_POSIX_SIGNALS=cross)])
+if test x"$ac_cv_HAVE_POSIX_SIGNALS" = x"yes"; then
+    AC_DEFINE(HAVE_POSIX_SIGNALS,1,[ ])
 fi
 
 dnl 'reboot()' system call: one argument (e.g. Linux) or two (e.g. Solaris)?
@@ -788,7 +804,7 @@ AC_CHECK_MEMBERS([struct tm.tm_gmtoff],,,[[#include <time.h>]])
 AC_CHECK_TYPES([nfds_t],,,[[#include <poll.h>]])
 
 AC_MSG_CHECKING(if clock_t is long enough)
-if test $ac_cv_sizeof_long -ge 8; then
+if test $ac_cv_sizeof_clock_t -ge 8; then
   AC_MSG_RESULT(yes)
   AC_DEFINE(CLOCK_T_IS_LONG_ENOUGH, 1, [Set if CLOCK_T is adequate by itself for the "indefinite future" (>= 100 years)])
 else
@@ -1089,6 +1105,19 @@ if test x$ac_cv_header_bzlib_h != xyes; then
 fi
 
 dnl ========================================================================
+dnl    Upstart via DBus
+dnl ========================================================================
+
+if test x$enable_upstart = xyes; then
+   PKG_CHECK_MODULES(DBUS, [dbus-1, dbus-glib-1])
+   AC_SUBST(DBUS_CFLAGS)
+   AC_SUBST(DBUS_LIBS)
+   AC_PATH_PROGS(DBUS_BINDING_TOOL, dbus-binding-tool)
+fi
+AM_CONDITIONAL(UPSTART, test x$enable_upstart = xyes)
+
+
+dnl ========================================================================
 dnl checks for library functions to replace them
 dnl
 dnl     NoSuchFunctionName:
@@ -1158,7 +1187,7 @@ else
 		-Wall
 		-Waggregate-return
 		-Wbad-function-cast 
-		-Wcast-qual 
+		-Wcast-qual
 		-Wcast-align 
 		-Wdeclaration-after-statement
 		-Wendif-labels
@@ -1281,6 +1310,7 @@ AC_SUBST(QUIET_LIBTOOL_OPTS)
 
 dnl The Makefiles and shell scripts we output
 AC_CONFIG_FILES(Makefile				        \
+config/Makefile						\
 include/Makefile						\
    include/pils/Makefile					\
    include/pils/plugin.h					\
@@ -1295,6 +1325,7 @@ lib/Makefile							\
    lib/plugins/Makefile						\
       lib/plugins/InterfaceMgr/Makefile				\
       lib/plugins/lrm/Makefile					\
+         lib/plugins/lrm/dbus/Makefile				\
       lib/plugins/stonith/Makefile				\
          lib/plugins/stonith/ribcl.py				\
          lib/plugins/stonith/external/Makefile			\
@@ -1306,6 +1337,7 @@ lib/Makefile							\
 lrm/Makefile					        	\
    lrm/lrmd/Makefile				        	\
    lrm/admin/Makefile				        	\
+   lrm/admin/cibsecret				        	\
    lrm/test/Makefile				        	\
    lrm/test/regression.sh					\
    lrm/test/lrmregtest						\
@@ -1337,7 +1369,7 @@ dnl *****************
 AC_MSG_RESULT([])
 AC_MSG_RESULT([$PACKAGE configuration:])
 AC_MSG_RESULT([  Version                  = ${VERSION} (Build: $GLUE_BUILD_VERSION)])
-AC_MSG_RESULT([  Features                 =${PKG_FEATURES}])
+AC_MSG_RESULT([  Features                 =${FEATURES}])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([  Prefix                   = ${prefix}])
 AC_MSG_RESULT([  Executables              = ${sbindir}])
