@@ -38,7 +38,7 @@ configure-stamp:
 	./configure --with-ocf-root=/usr/lib/ocf --with-initdir=/etc/init.d \
 		    --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
   		    --mandir=/usr/share/man --libdir=/usr/lib \
-		    --disable-fatal-warnings
+		    --enable-upstart --disable-fatal-warnings
 	touch configure-stamp
 
 build: build-arch build-indep
@@ -67,8 +67,15 @@ install-arch:
 	dh_testroot
 	dh_prep -s
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
-	chrpath -r "" debian/tmp/usr/lib/stonith/plugins/stonith2/ipmilan.so
+	for file in `find debian/tmp -name '*.la'`; do \
+		sed -i "/dependency_libs/ s/'.*'/''/" $$file ; \
+	done
+	chrpath -r "" debian/tmp/usr/lib/stonith/plugins/stonith2/ipmilan.so || true
 	dh_install --sourcedir=$(CURDIR)/debian/tmp --list-missing
+
+	# install logd.cf configuration file
+	mkdir -p $(CURDIR)/debian/cluster-glue/etc/
+	cp -ax $(CURDIR)/logd/logd.cf $(CURDIR)/debian/cluster-glue/etc/
 
 binary-common:
 	dh_testdir
@@ -82,7 +89,7 @@ binary-common:
 	dh_compress
 	dh_fixperms
 	dh_perl
-	dh_makeshlibs
+	dh_makeshlibs -V
 	dh_installdeb
 	dh_shlibdeps
 	dh_gencontrol
@@ -91,6 +98,7 @@ binary-common:
 
 # Build architecture independant packages using the common target.
 binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
 
 # Build architecture dependant packages using the common target.
 binary-arch: build-arch install-arch

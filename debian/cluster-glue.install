@@ -7,6 +7,7 @@ usr/lib/heartbeat/plugins/InterfaceMgr/generic.so
 usr/lib/heartbeat/plugins/RAExec/lsb.so
 usr/lib/heartbeat/plugins/RAExec/ocf.so
 usr/lib/heartbeat/plugins/RAExec/heartbeat.so
+usr/lib/heartbeat/plugins/RAExec/upstart.so
 usr/lib/heartbeat/plugins/test/test.so
 usr/lib/heartbeat/lrmd
 usr/lib/heartbeat/ha_logd
@@ -54,6 +55,8 @@ usr/share/doc/cluster-glue/stonith/README.ibmrsa
 usr/share/doc/cluster-glue/stonith/README.dracmc
 usr/share/doc/cluster-glue/stonith/README.wti_mpc
 usr/share/doc/cluster-glue/stonith/README.ibmrsa-telnet
+usr/share/doc/cluster-glue/stonith/README.vcenter
+usr/share/doc/cluster-glue/stonith/README.rackpdu
 usr/share/cluster-glue/lrmtest/testcases/BSC
 usr/share/cluster-glue/lrmtest/testcases/metadata
 usr/share/cluster-glue/lrmtest/testcases/metadata.exp
@@ -89,3 +92,5 @@ usr/share/man/man8/meatclient.8
 usr/share/man/man8/hb_report.8
 usr/share/man/man8/ha_logd.8
 usr/share/man/man8/stonith.8
+usr/share/man/man8/lrmadmin.8
+usr/sbin/cibsecret

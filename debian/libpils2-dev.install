@@ -1,0 +1,4 @@
+usr/lib/libpils.so
+usr/lib/libpils.a
+usr/lib/libpils.la
+usr/include/pils/*.h

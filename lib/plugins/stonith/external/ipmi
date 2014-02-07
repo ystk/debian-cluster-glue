@@ -23,8 +23,8 @@
 # other software, or any other product whatsoever.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write the Free Software Foundation,
-# Inc., 59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
+# along with this program; if not, write the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
 # Initialization -- fix locale settings so we can parse output from
@@ -36,7 +36,7 @@ RESET="power reset"
 POWEROFF="power off"
 POWERON="power on"
 STATUS="power status"
-IPMITOOL=`which ipmitool 2>/dev/null`
+IPMITOOL=${ipmitool:-"`which ipmitool 2>/dev/null`"}
 
 have_ipmi() {
 	test -x "${IPMITOOL}"
@@ -46,6 +46,7 @@ have_ipmi() {
 # username, and password, and invokes ipmitool with any arguments
 # passed in
 run_ipmitool() {
+	local ipmitool_opts privlvl=""
 	have_ipmi || {
 		ha_log.sh err "ipmitool not installed"
 		return 1
@@ -59,10 +60,37 @@ run_ipmitool() {
 		# default to "lan" interface
 		interface="lan"
 	fi
+	if [ -n "${priv}" ]; then
+		# default to "lan" interface
+		privlvl="-L $priv"
+	fi
+
+	ipmitool_opts="-I ${interface} -H ${ipaddr} $privlvl"
+
+        case "${passwd_method}" in
+            param|'')
+                passwd_method=param
+                M="-P"
+                ;;
+            env)
+                M="-E"
+                ;;
+            file)
+                M="-f"
+                ;;
+            *)
+		ha_log.sh err "invalid passwd_method: \"${passwd_method}\""
+		return 1
+        esac
 
 	action="$*"
 
-	${IPMITOOL} -I ${interface} -H ${ipaddr} -U "${userid}" -P "${passwd}" ${action} 2>&1
+        if [ $passwd_method = env ]
+        then
+            IPMI_PASSWORD="${passwd}" ${IPMITOOL} $ipmitool_opts -U "${userid}" -E ${action}
+        else
+            ${IPMITOOL} $ipmitool_opts -U "${userid}" $M "${passwd}" ${action}
+        fi 2>&1
 }
 
 # Yet another convenience wrapper that invokes run_ipmitool, captures
@@ -94,8 +122,6 @@ ipmi_is_power_on() {
 	esac
 }
 
-
-# Rewrite the hostname to accept "," as a delimeter for hostnames too.
 
 case ${1} in
 gethosts)
@@ -175,7 +201,7 @@ The IP address of the STONITH device.
 </longdesc>
 </parameter>
 
-<parameter name="userid" unique="1">
+<parameter name="userid" unique="0">
 <content type="string" />
 <shortdesc lang="en">
 Login
@@ -185,7 +211,7 @@ The username used for logging in to the STONITH device.
 </longdesc>
 </parameter>
 
-<parameter name="passwd" unique="1">
+<parameter name="passwd" unique="0">
 <content type="string" />
 <shortdesc lang="en">
 Password
@@ -195,13 +221,48 @@ The password used for logging in to the STONITH device.
 </longdesc>
 </parameter>
 
-<parameter name="interface" unique="1">
+<parameter name="passwd_method" unique="0">
+<content type="string" default="param"/>
+<shortdesc lang="en">
+Method for passing passwd parameter
+</shortdesc>
+<longdesc lang="en">
+Method for passing the passwd parameter to ipmitool
+  param: pass as parameter (-P)
+  env:   pass via environment (-E)
+  file:  value of "passwd" is actually a file name, pass with (-f)
+</longdesc>
+</parameter>
+
+<parameter name="interface" unique="0">
 <content type="string" default="lan"/>
 <shortdesc lang="en">
 IPMI interface
 </shortdesc>
 <longdesc lang="en">
 IPMI interface to use, such as "lan" or "lanplus".
+</longdesc>
+</parameter>
+
+<parameter name="priv" unique="0">
+<content type="string" default=""/>
+<shortdesc lang="en">
+The privilege level of the user.
+</shortdesc>
+<longdesc lang="en">
+The privilege level of the user, for instance OPERATOR. If
+unspecified the privilege level is ADMINISTRATOR. See
+ipmitool(1) -L option for more information.
+</longdesc>
+</parameter>
+
+<parameter name="ipmitool" unique="0">
+<content type="string" default=""/>
+<shortdesc lang="en">
+IPMI command(ipmitool) 
+</shortdesc>
+<longdesc lang="en">
+Specify the full path to IPMI command.
 </longdesc>
 </parameter>
 

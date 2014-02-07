@@ -3,39 +3,141 @@ Section: admin
 Priority: optional
 Maintainer: Debian HA Maintainers <debian-ha-maintainers@lists.alioth.debian.org>
 Uploaders: Martin Loschwitz <madkiss@debian.org>, Anibal Monsalve Salazar <anibal@debian.org>, Simon Horman <horms@debian.org>, Frederik Schüler <fs@debian.org>
-Build-Depends: debhelper (>= 7), libsnmp-dev, libglib2.0-dev, perl, net-tools, iputils-ping, python, psmisc, libnet1-dev, iproute, libtool, libcurl4-openssl-dev | libcurl3-openssl-dev, libxml2-dev, bison, flex, uuid-dev, lynx, libbz2-dev, zlib1g-dev, uuid-dev, libsensors4-dev | libsensors-dev, libltdl3-dev, swig, openssh-client, libgnutls-dev, python-central (>= 0.5), python-dev, libpam0g-dev, libncurses5-dev, psmisc, libopenhpi-dev, libopenipmi-dev, autoconf, automake, libtool, xsltproc, docbook-xsl, chrpath, docbook-xml
-Standards-Version: 3.9.0
+Build-Depends: debhelper (>= 7), libsnmp-dev, libglib2.0-dev, perl, net-tools, iputils-ping, python, psmisc, libnet1-dev, iproute, libtool, libcurl4-openssl-dev | libcurl3-openssl-dev, libxml2-dev, bison, flex, uuid-dev, lynx, libbz2-dev, zlib1g-dev, uuid-dev, libsensors4-dev | libsensors-dev, libltdl3-dev, swig, openssh-client, libgnutls-dev, python-central (>= 0.5), python-dev, libpam0g-dev, libncurses5-dev, psmisc, libopenhpi-dev, libopenipmi-dev, autoconf, automake, libtool, xsltproc, docbook-xsl, chrpath, docbook-xml, libdbus-glib-1-dev, libdbus-1-dev, help2man
+Standards-Version: 3.9.1
 Homepage: http://hg.linux-ha.org/glue/
 Vcs-Hg: http://hg.debian.org/hg/debian-ha/cluster-glue
 Vcs-Browser: http://hg.debian.org/hg/debian-ha/cluster-glue
 XS-Python-Version: current
 
 Package: libcluster-glue
+Architecture: all
+Depends: ${misc:Depends}, liblrm2 (>= ${binary:Version}), libpils2 (>= ${binary:Version}), libplumb2 (>= ${binary:Version}), libplumbgpl2 (>= ${binary:Version}), libstonith1 (>= ${binary:Version})
+Description: Reusable cluster libraries (transitional package)
+ This package used to contain all the libraries from cluster-glue,
+ the reusable cluster components package. It's now a transitional
+ package without any content, depending on all the single library
+ packages that now exist.
+
+Package: liblrm2
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Replaces: cluster-glue (<= 1.0.3-2), heartbeat (<= 2.99.2+sles11r9-5)
-Conflicts: cluster-glue (<= 1.0.3-2), heartbeat (<= 2.99.2+sles11r9-5)
-Description: The reusable cluster components for Linux HA (libraries)
- This package contains the libraries provided by the cluster
- glue component by the Linux-HA project; it offers various
- re-usable cluster stack libraries. If you plan to run the
- Linux-HA cluster stack, you will need this package.
+Replaces: libcluster-glue (<= 1.0.6-1)
+Conflicts: libcluster-glue (<= 1.0.6-1)
+Description: Reusable cluster libraries -- liblrm2
+ This package contains the lrm helper library from cluster-glue,
+ the reusable cluster components package. Install it if you want 
+ to use the pacemaker cluster manager.
+
+Package: libpils2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Replaces: libcluster-glue (<= 1.0.6-1)
+Conflicts: libcluster-glue (<= 1.0.6-1)
+Description: Reusable cluster libraries -- libpils2
+ This package contains the pils library from cluster-glue, the 
+ reusable cluster components package. Install it if you want to 
+ use the pacemaker cluster manager.
+ 
+Package: libplumb2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Replaces: libcluster-glue (<= 1.0.6-1)
+Conflicts: libcluster-glue (<= 1.0.6-1)
+Description: Reusable cluster libraries -- libplumb2
+ This package contains the plumber ibrary from cluster-glue, the 
+ reusable cluster components package. Install it if you want to 
+ use the pacemaker cluster manager.
+
+Package: libplumbgpl2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Replaces: libcluster-glue (<= 1.0.6-1)
+Conflicts: libcluster-glue (<= 1.0.6-1)
+Description: Reusable cluster libraries -- libplumbgpl2
+ This package contains the plumber library from cluster-glue,
+ the reusable cluster components package, in the GPL version. 
+ Install it if you want to use the pacemaker cluster manager.
+
+Package: libstonith1
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Replaces: libcluster-glue (<= 1.0.6-1), libstonith0
+Conflicts: libcluster-glue (<= 1.0.6-1), libstonith0
+Description: Reusable cluster libraries -- libstonith1
+ This package contains the stonith library from cluster-glue, the 
+ reusable cluster components package. Install it if you want to 
+ use the pacemaker cluster manager.
+
+Package: liblrm2-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, liblrm2 (= ${binary:Version})
+Replaces: libcluster-glue-dev (<= 1.0.6-1)
+Conflicts: libcluster-glue-dev (<= 1.0.6-1)
+Description: Reusable cluster development files -- liblrm
+ This package contains the development files of the lrm helper 
+ library from cluster-glue, the reusable cluster components 
+ package. 
+
+Package: libpils2-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libpils2 (= ${binary:Version}), libltdl-dev
+Replaces: libcluster-glue-dev (<= 1.0.6-1)
+Conflicts: libcluster-glue-dev (<= 1.0.6-1)
+Description: Reusable cluster development files -- libpils2
+ This package contains the development files of the pils 
+ library from cluster-glue, the reusable cluster components 
+ package. 
+
+Package: libplumb2-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libplumb2 (= ${binary:Version})
+Replaces: libcluster-glue-dev (<= 1.0.6-1)
+Conflicts: libcluster-glue-dev (<= 1.0.6-1)
+Description: Reusable cluster development files -- libplumb2
+ This package contains the development files of the plumber 
+ library from cluster-glue, the reusable cluster components 
+ package. 
+
+Package: libplumbgpl2-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libplumbgpl2 (= ${binary:Version})
+Replaces: libcluster-glue-dev (<= 1.0.6-1)
+Conflicts: libcluster-glue-dev (<= 1.0.6-1)
+Description: Reusable cluster development files -- libplumbgpl2
+ This package contains the development files of the plumber 
+ library from cluster-glue, the reusable cluster components 
+ package, in the GPL version. 
+
+Package: libstonith1-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libstonith1 (= ${binary:Version})
+Replaces: libcluster-glue-dev (<= 1.0.6-1), libstonith0-dev
+Conflicts: libcluster-glue-dev (<= 1.0.6-1), libstonith0-dev
+Description: Reusable cluster development files -- libstonith1
+ This package contains the development files of the stonith 
+ library from cluster-glue, the reusable cluster components 
+ package. 
 
 Package: libcluster-glue-dev
-Architecture: any
+Architecture: all
 Section: libdevel
-Depends: ${shlibs:Depends}, ${misc:Depends}, libcluster-glue (= ${binary:Version})
-Replaces: cluster-glue-dev (<= 1.0.3-2)
-Conflicts: cluster-glue-dev (<= 1.0.3-2)
-Description: The reusable cluster components for Linux HA (library dev files)
- This package contains the headers for the libraries provided 
- by the cluster glue component by the Linux-HA project; it 
- offers various re-usable cluster stack libraries. If you plan 
- to run the Linux-HA cluster stack, you will need this package.
+Depends: ${misc:Depends}, liblrm2-dev (>= ${binary:Version}), libpils2-dev (>= ${binary:Version}), libplumb2-dev (>= ${binary:Version}), libplumbgpl2-dev (>= ${binary:Version}), libstonith1-dev (>= ${binary:Version})
+Description: The reusable cluster components for Linux HA (transitional package)
+ This package used to contain all the development files for the 
+ libraries from cluster-glue, the reusable cluster components 
+ package. It's now a transitional package without any content, 
+ depending on all the single library development packages that 
+ now exist.
 
 Package: cluster-glue
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, python, libtimedate-perl
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, python, libtimedate-perl, liblrm2 (= ${binary:Version}), libpils2 (= ${binary:Version}), libplumb2 (= ${binary:Version}), libplumbgpl2 (= ${binary:Version}), libstonith1 (= ${binary:Version})
 Replaces: heartbeat (<= 2.99.2+sles11r9-5), heartbeat-common (<= 2.99.2+sles11r9-5), libheartbeat2 (<= 2.99.2+sles11r9-5)
 Conflicts: heartbeat (<= 2.99.2+sles11r9-5), heartbeat-common (<= 2.99.2+sles11r9-5), libheartbeat2 (<= 2.99.2+sles11r9-5)
 Description: The reusable cluster components for Linux HA
@@ -45,9 +147,9 @@ Description: The reusable cluster components for Linux HA
 
 Package: cluster-glue-dev
 Architecture: any
-Depends: cluster-glue (= ${binary:Version}), ${misc:Depends}
-Replaces: libheartbeat2-dev (<= 2.99.2+sles11r9-5), heartbeat-dev (<= 2.99.2+sles11r9-5)
-Conflicts: libheartbeat2-dev (<= 2.99.2+sles11r9-5), heartbeat-dev (<= 2.99.2+sles11r9-5)
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, liblrm2-dev (= ${binary:Version}), libpils2-dev (= ${binary:Version}), libplumb2-dev (= ${binary:Version}), libplumbgpl2-dev (= ${binary:Version}), libstonith1-dev (= ${binary:Version})
+Replaces: libcluster-glue-dev (<= 1.0.6-1)
+Conflicts: libcluster-glue-dev (<= 1.0.6-1)
 Description: Development files for the cluster glue components
  This package includes headers and static libraries for the glue
  cluster components.

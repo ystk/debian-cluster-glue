@@ -1,0 +1,41 @@
+diff -ruN Reusable-Cluster-Components-glue--5ea7e344a633.old/lrm/lrmd/lrmd.c Reusable-Cluster-Components-glue--5ea7e344a633/lrm/lrmd/lrmd.c
+--- Reusable-Cluster-Components-glue--5ea7e344a633.old/lrm/lrmd/lrmd.c	2011-10-19 15:18:06.000000000 +0000
++++ Reusable-Cluster-Components-glue--5ea7e344a633/lrm/lrmd/lrmd.c	2011-10-20 09:26:43.385459974 +0000
+@@ -1533,6 +1533,28 @@
+ 	lrmd_client_t* client = (lrmd_client_t*) user_data;
+ 
+ 	CHECK_ALLOCATED(client, "client", );
++
++	/* If we've been called as a result of g_src and/or
++	 * g_src_cbk being unreffed, don't try to unref it
++	 * again, as that'll deadlock. OTOH, we might have
++	 * introduced a leak here. */
++#if 0
++	if (client->g_src != NULL) {
++		G_main_del_IPC_Channel(client->g_src);
++	}
++
++	if (client->g_src_cbk != NULL) {
++		G_main_del_IPC_Channel(client->g_src_cbk);
++	}
++#endif
++	lrmd_client_destroy(client);
++
++}
++
++static void
++remove_client (lrmd_client_t *client)
++{
++	CHECK_ALLOCATED(client, "client", );
+ 	if (client->g_src != NULL) {
+ 		G_main_del_IPC_Channel(client->g_src);
+ 	}
+@@ -1617,7 +1639,7 @@
+ 	exist = lookup_client(client->pid);
+ 	if (NULL != exist) {
+ 		g_hash_table_remove(clients, (gpointer)&client->pid);
+-		on_remove_client(exist);
++		remove_client(exist);
+ 		lrmd_log(LOG_NOTICE,
+ 			"on_msg_register: the client [pid:%d] already exists in "
+ 			"internal client list, let remove it at first."

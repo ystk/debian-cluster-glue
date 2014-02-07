@@ -1,8 +1,0 @@
-usr/lib/*.so
-usr/lib/*.a
-usr/lib/*.la
-usr/include/clplumbing/*.h
-usr/include/heartbeat/*.h
-usr/include/heartbeat/lrm/*.h
-usr/include/pils/*.h
-usr/include/stonith/*.h

@@ -76,7 +76,7 @@
 "    <action name=\"status\"  timeout=\"15\" />\n"\
 "    <action name=\"restart\"  timeout=\"15\" />\n"\
 "    <action name=\"force-reload\"  timeout=\"15\" />\n"\
-"    <action name=\"monitor\" timeout=\"15\" interval=\"15\" start-delay=\"15\" />\n"\
+"    <action name=\"monitor\" timeout=\"15\" interval=\"15\" />\n"\
 "    <action name=\"meta-data\"  timeout=\"5\" />\n"\
 "  </actions>\n"\
 "  <special tag=\"LSB\">\n"\
@@ -370,6 +370,8 @@ get_resource_list(GList ** rsc_info)
 			*rsc_info = g_list_remove(*rsc_info, cur->data);
 			g_free(cur->data);
 		}
+#else
+                (void) is_lsb_script;
 #endif
 		cur = tmp;
 	}
@@ -504,6 +506,8 @@ get_resource_meta(const char* rsc_type,  const char* provider)
 			break;
 		}
 	}
+#else
+        (void) next_continue;
 #endif
 
 	/* Enter into the lsb-compliant comment block */

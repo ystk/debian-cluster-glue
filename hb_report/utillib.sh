@@ -108,14 +108,18 @@ syslogmsg() {
 #
 findmsg() {
 	# this is tricky, we try a few directories
-	syslogdirs="/var/log /var/logs /var/syslog /var/adm /var/log/ha /var/log/cluster"
+	syslogdirs="/var/log /var/logs /var/syslog /var/adm
+	/var/log/ha /var/log/cluster /var/log/pacemaker
+	/var/log/heartbeat /var/log/crm /var/log/corosync /var/log/openais"
 	favourites="ha-*"
 	mark=$1
 	log=""
 	for d in $syslogdirs; do
 		[ -d $d ] || continue
 		log=`grep -l -e "$mark" $d/$favourites` && break
+		test "$log" && break
 		log=`grep -l -e "$mark" $d/*` && break
+		test "$log" && break
 	done 2>/dev/null
 	[ "$log" ] &&
 		ls -t $log | tr '\n' ' '
@@ -169,6 +173,15 @@ find_getstampproc() {
 		trycnt=$(($trycnt-1))
 	done
 	echo $func
+}
+find_first_ts() {
+	local l ts
+	while read l; do
+		ts=$(str2time "`echo $l | $getstampproc`")
+		[ "$ts" ] && break
+		warning "cannot extract time: |$l|; will try the next one"
+	done
+	echo $ts
 }
 findln_by_time() {
 	local logf=$1
@@ -308,6 +321,54 @@ check_perms() {
 #
 # coredumps
 #
+pkg_mgr_list() {
+# list of:
+# regex pkg_mgr
+# no spaces allowed in regex
+	cat<<EOF
+Try:.zypper.install zypper
+EOF
+}
+MYBINARIES="crmd|pengine|lrmd|attrd|cib|mgmtd|stonithd|corosync|libplumb|libpils"
+listpkg_zypper() {
+	local binary=$1 core=$2
+	gdb $binary $core </dev/null 2>&1 |
+	awk -v bins="$MYBINARIES" '
+	n>0 && /^Try: zypper install/ {gsub("\"",""); print $NF}
+	n>0 {n=0}
+	/Missing separate debuginfo/ && match($NF, bins) {n=1}
+	' | sort -u
+}
+fetchpkg_zypper() {
+	debug "get debuginfo packages using zypper: $@"
+	zypper -qn install -C $@ >/dev/null
+}
+find_pkgmgr() {
+	local binary=$1 core=$2
+	pkg_mgr_list |
+	while read regex pkg_mgr; do
+		if gdb $binary $core </dev/null 2>&1 |
+				grep "$regex" > /dev/null; then
+			echo $pkg_mgr
+			break
+		fi
+	done
+}
+get_debuginfo() {
+	local binary=$1 core=$2
+	local pkg_mgr pkgs
+	gdb $binary $core </dev/null 2>/dev/null |
+		grep 'no debugging symbols found' > /dev/null ||
+		return  # no missing debuginfo
+	pkg_mgr=`find_pkgmgr $binary $core`
+	if [ -z "$pkg_mgr" ]; then
+		warning "found core for $binary but there is no debuginfo and we don't know how to get it on this platform"
+		return
+	fi
+	pkgs=`listpkg_$pkg_mgr $binary $core`
+	[ -n "$pkgs" ] &&
+		fetchpkg_$pkg_mgr $pkgs
+}
 findbinary() {
 	random_binary=`which cat 2>/dev/null` # suppose we are lucky
 	binary=`gdb $random_binary $1 < /dev/null 2>/dev/null |
@@ -353,6 +414,7 @@ getbt() {
 	for corefile; do
 		absbinpath=`findbinary $corefile`
 		[ x = x"$absbinpath" ] && continue
+		get_debuginfo $absbinpath $corefile
 		echo "====================== start backtrace ======================"
 		ls -l $corefile
 		gdb -batch -n -quiet -ex ${BT_OPTS:-"thread apply all bt full"} -ex quit \
@@ -422,6 +484,14 @@ get_crm_nodes() {
 			}
 	}
 	'
+}
+get_live_nodes() {
+	if [ `id -u` = 0 ] && which fping >/dev/null 2>&1; then
+		fping -a $@ 2>/dev/null
+	else
+		local h
+		for h; do ping -c 2 -q $h >/dev/null 2>&1 && echo $h; done
+	fi
 }
 
 #

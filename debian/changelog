@@ -1,3 +1,110 @@
+cluster-glue (1.0.9+hg2665-1) unstable; urgency=low
+
+  * Update to latest upstream mercurial tip; includes a fix for the IPMI
+    stonith plugin
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 29 Feb 2012 15:33:34 +0000
+
+cluster-glue (1.0.8-3) unstable; urgency=high
+
+  * debian/patches/series: Disable raexecupstart.patch as the bug causing
+    this was in glib and is fixed in Unstable by now. For further details,
+    please refer to the Ubuntu bug tracking system at
+    https://bugs.launchpad.net/ubuntu/+source/cluster-glue/+bug/821732
+    (urgency is set to high because this fixes a memory leak that might
+    otherwise crash lrmd and crmd along with it)
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 15 Nov 2011 17:00:18 +0000
+
+cluster-glue (1.0.8-2) unstable; urgency=low
+
+  * Added help2man to the Build-Depends: field in debian/control 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Thu, 20 Oct 2011 17:16:24 +0000
+
+cluster-glue (1.0.8-1) unstable; urgency=low
+
+  * New upstream version 1.0.8.
+  * Added numerous new files to debian/cluster-glue.install
+
+ -- Martin Loschwitz <madkiss@debian.org>  Thu, 20 Oct 2011 09:05:29 +0000
+
+cluster-glue (1.0.7+hg2618-3) UNRELEASED; urgency=low
+
+  * Integrated numerous changes from the Ubuntu version of this package,
+  worth being mentioned is the upstart patch. 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Thu, 20 Oct 2011 08:54:26 +0000
+
+cluster-glue (1.0.7+hg2618-2) unstable; urgency=low
+
+  * debian/control: Add proper Replaces: and Conflicts: for libstonithd0-dev 
+    for libstonithd1-dev to avoid conflicting files (Closes: #639272)
+  * debian/rules: Install the logd.cf configuration file for logd as it was
+    missing up to this point (thanks to Andreas Kurz for pointing this out)
+
+ -- Martin Loschwitz <madkiss@debian.org>  Fri, 26 Aug 2011 06:09:24 +0000
+
+cluster-glue (1.0.7+hg2618-1) unstable; urgency=low
+
+  * New upstream Mercurial Checkout
+  * Acknowledging previous NMUs; thank you very much!
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 24 Aug 2011 09:00:46 +0000
+
+cluster-glue (1.0.7-3.3) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Also empty dependency_libs for plugins.
+
+ -- Luk Claes <luk@debian.org>  Sun, 03 Jul 2011 09:39:39 +0200
+
+cluster-glue (1.0.7-3.2) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Remove references to other libraries from dependency_libs field
+    closes: #619551.
+
+ -- Luk Claes <luk@debian.org>  Sun, 29 May 2011 19:06:36 +0200
+
+cluster-glue (1.0.7-3.1) unstable; urgency=high
+
+  * Non-maintainer upload.
+  * High urgency for RC bug fix.
+  * Add missing dependency on libltdl-dev to libpils2-dev, closes: #621078.
+
+ -- Julien Cristau <jcristau@debian.org>  Sun, 08 May 2011 17:29:13 +0200
+
+cluster-glue (1.0.7-3) unstable; urgency=low
+
+  [ Andres Rodriguez ]
+  * Remove ${shlibs:depends} from library -dev packages.
+
+ -- Simon Horman <horms@debian.org>  Mon, 20 Dec 2010 09:29:12 +0900
+
+cluster-glue (1.0.7-2) unstable; urgency=low
+
+  * New upstream for unstable
+
+ -- Simon Horman <horms@debian.org>  Thu, 16 Dec 2010 23:11:46 +0900
+
+cluster-glue (1.0.7-1) experimental; urgency=low
+
+  * New Upstream
+
+ -- Simon Horman <horms@debian.org>  Thu, 16 Dec 2010 21:34:47 +0900
+
+cluster-glue (1.0.6+hg2461-1) experimental; urgency=low
+
+  * Upload to experimental
+  * New upstream checkout (2010-10-19) 
+  * Major change: Library split into multiple packages to comply with
+    Debian policy better (as per c. 8.1)
+  * Removed the "spelling-fixes"-patch as it was applied by upstream
+  * Bumped Standards-Version to 3.9.1
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 19 Oct 2010 11:50:00 +0200
+
 cluster-glue (1.0.6-1) unstable; urgency=low
 
   * New upstream (closes: #588938)

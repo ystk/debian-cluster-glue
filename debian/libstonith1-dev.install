@@ -1,0 +1,4 @@
+usr/lib/libstonith.so
+usr/lib/libstonith.a
+usr/lib/libstonith.la
+usr/include/stonith/*.h

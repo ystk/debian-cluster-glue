@@ -136,6 +136,15 @@ inet_pton(int af, const char *src, void *dst);
 #define	POINTER_TO_SIZE_T(p)	((size_t)(p)) /*pointer cast as size_t*/
 #define	POINTER_TO_SSIZE_T(p)	((ssize_t)(p)) /*pointer cast as ssize_t*/
 #define	POINTER_TO_ULONG(p)	((unsigned long)(p)) /*pointer cast as unsigned long*/
+	/* Sometimes we get a const g_something *, but need to pass it internally
+	 * to other functions taking a non-const g_something *, which results
+	 * with gcc and -Wcast-qual in a compile time warning, and with -Werror
+	 * even to a compile time error.
+	 * Workarounds have been to e.g. memcpy(&list, _list); or similar,
+	 * the reason of which is non-obvious to the casual reader.
+	 * This macro achieves the same, and annotates why it is done.
+	 */
+#define UNCONST_CAST_POINTER(t, p)	((t)(unsigned long)(p))
 
 #define	HAURL(url)	HA_URLBASE url
 
@@ -159,5 +168,15 @@ inet_pton(int af, const char *src, void *dst);
 #else
 #	define	ASSERT(X)	{if(!(X)) ha_assert("X", __LINE__, __FILE__);}
 #endif
+
+/* shamelessly stolen from linux kernel */
+/* Force a compilation error if condition is true */
+#define BUILD_BUG_ON(condition) ((void)BUILD_BUG_ON_ZERO(condition))
+/* Force a compilation error if condition is true, but also produce a
+ * result (of value 0 and type size_t), so the expression can be used
+ * e.g. in a structure initializer (or where-ever else comma expressions
+ * aren't permitted). */
+#define BUILD_BUG_ON_ZERO(e) (sizeof(struct { int:-!!(e); }))
+#define BUILD_BUG_ON_NULL(e) ((void *)sizeof(struct { int:-!!(e); }))
 
 #endif /* LHA_INTERNAL_H */

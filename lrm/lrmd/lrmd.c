@@ -76,6 +76,7 @@ struct msg_map
 	const char 	*msg_type;
 	int	reply_time;
 	msg_handler	handler;
+	int min_priv; /* minimum privileges required */
 };
 
 /*
@@ -89,23 +90,23 @@ struct msg_map
 	(p->reply_time==REPLY_NOW)
 
 struct msg_map msg_maps[] = {
-	{REGISTER,	REPLY_NOW,	on_msg_register},
-	{GETRSCCLASSES,	NO_MSG,	on_msg_get_rsc_classes},
-	{GETRSCTYPES,	NO_MSG,	on_msg_get_rsc_types},
-	{GETPROVIDERS,	NO_MSG,	on_msg_get_rsc_providers},
-	{ADDRSC,	REPLY_NOW,	on_msg_add_rsc},
-	{GETRSC,	NO_MSG,	on_msg_get_rsc},
-	{GETLASTOP,	NO_MSG,	on_msg_get_last_op},
-	{GETALLRCSES,	NO_MSG,	on_msg_get_all},
-	{DELRSC,	REPLY_NOW,	on_msg_del_rsc},
-	{FAILRSC,	REPLY_NOW,	on_msg_fail_rsc},
-	{PERFORMOP,	REPLY_NOW,	on_msg_perform_op},
-	{FLUSHOPS,	REPLY_NOW,	on_msg_flush_all},
-	{CANCELOP,	REPLY_NOW,	on_msg_cancel_op},
-	{GETRSCSTATE,	NO_MSG,	on_msg_get_state},
-	{GETRSCMETA,	NO_MSG, 	on_msg_get_metadata},
-	{SETLRMDPARAM,	REPLY_NOW, 	on_msg_set_lrmd_param},
-	{GETLRMDPARAM,	NO_MSG, 	on_msg_get_lrmd_param},
+	{REGISTER,	REPLY_NOW,	on_msg_register, 0},
+	{GETRSCCLASSES,	NO_MSG,	on_msg_get_rsc_classes, 0},
+	{GETRSCTYPES,	NO_MSG,	on_msg_get_rsc_types, 0},
+	{GETPROVIDERS,	NO_MSG,	on_msg_get_rsc_providers, 0},
+	{ADDRSC,	REPLY_NOW,	on_msg_add_rsc, PRIV_ADMIN},
+	{GETRSC,	NO_MSG,	on_msg_get_rsc, PRIV_ADMIN},
+	{GETLASTOP,	NO_MSG,	on_msg_get_last_op, PRIV_ADMIN},
+	{GETALLRCSES,	NO_MSG,	on_msg_get_all, PRIV_ADMIN},
+	{DELRSC,	REPLY_NOW,	on_msg_del_rsc, PRIV_ADMIN},
+	{FAILRSC,	REPLY_NOW,	on_msg_fail_rsc, PRIV_ADMIN},
+	{PERFORMOP,	REPLY_NOW,	on_msg_perform_op, PRIV_ADMIN},
+	{FLUSHOPS,	REPLY_NOW,	on_msg_flush_all, PRIV_ADMIN},
+	{CANCELOP,	REPLY_NOW,	on_msg_cancel_op, PRIV_ADMIN},
+	{GETRSCSTATE,	NO_MSG,	on_msg_get_state, PRIV_ADMIN},
+	{GETRSCMETA,	NO_MSG, 	on_msg_get_metadata, 0},
+	{SETLRMDPARAM,	REPLY_NOW, 	on_msg_set_lrmd_param, PRIV_ADMIN},
+	{GETLRMDPARAM,	NO_MSG, 	on_msg_get_lrmd_param, 0},
 };
 #define MSG_NR sizeof(msg_maps)/sizeof(struct msg_map)
 
@@ -123,12 +124,24 @@ static gboolean reg_to_apphbd		= FALSE;
 static int max_child_count		= 4;
 static int retry_interval		= 1000; /* Millisecond */
 static int child_count			= 0;
+static IPC_Auth	* auth = NULL;
 
 static struct {
 	int	opcount;
 	int	clientcount;
 	int	rsccount;
 }lrm_objectstats;
+
+/* define indexes into logmsg_ctrl_defs */
+#define OP_STAYED_TOO_LONG 0
+static struct logspam logmsg_ctrl_defs[] = {
+	{ "operation stayed too long in the queue",
+		10, 60, 120, /* max 10 messages in 60s, then delay for 120s */
+		"configuration advice: reduce operation contention "
+		"either by increasing lrmd max_children or by increasing intervals "
+		"of monitor operations"
+	},
+};
 
 #define set_fd_opts(fd,opts) do { \
 	int flag; \
@@ -633,6 +646,21 @@ errout:
 	rsc = NULL;
 	return rsc;
 }
+
+static void
+dump_op(gpointer key, gpointer val, gpointer data)
+{
+	lrmd_op_t* lrmd_op = (lrmd_op_t*) val;
+
+	lrmd_op_dump(lrmd_op, "rsc->last_op_table");
+}
+static void
+dump_op_table(gpointer key, gpointer val, gpointer data)
+{
+	GHashTable* table = (GHashTable*) val;
+
+	g_hash_table_foreach(table, dump_op, data);
+}
 static void
 lrmd_rsc_dump(char* rsc_id, const char * text)
 {
@@ -652,6 +680,12 @@ lrmd_rsc_dump(char* rsc_id, const char * text)
 	if(!rsc) {
 		return;
 	}
+
+	/* Avoid infinite recursion loops... */
+	if (incall) {
+		return;
+	}
+	incall = TRUE;
 	/* TODO: Dump params and last_op_table FIXME */
 
 	lrmd_debug(LOG_DEBUG, "%s: BEGIN resource dump", text);
@@ -661,12 +695,6 @@ lrmd_rsc_dump(char* rsc_id, const char * text)
 	,	lrm_str(rsc->type)
 	,	lrm_str(rsc->class)
 	,	lrm_str(rsc->provider));
-
-	/* Avoid infinite recursion loops... */
-	if (incall) {
-		return;
-	}
-	incall = TRUE;
 
 	lrmd_debug(LOG_DEBUG, "%s: rsc->op_list...", text);
 	for(oplist = g_list_first(rsc->op_list); oplist;
@@ -686,6 +714,12 @@ lrmd_rsc_dump(char* rsc_id, const char * text)
 	}
 	else {
 		lrmd_debug(LOG_DEBUG, "%s: rsc->last_op_done==NULL", text);
+	}
+	if (rsc->last_op_table) {
+		g_hash_table_foreach(rsc->last_op_table,dump_op_table,NULL);
+	}
+	else {
+		lrmd_debug(LOG_DEBUG, "%s: rsc->last_op_table==NULL", text);
 	}
 	lrmd_debug(LOG_DEBUG, "%s: END resource dump", text);
 	incall = FALSE;
@@ -1052,13 +1086,9 @@ init_start ()
 	DIR* dir = NULL;
 	PILPluginUniv * PluginLoadingSystem = NULL;
 	struct dirent* subdir;
-	struct passwd*	pw_entry;
 	char* dot = NULL;
 	char* ra_name = NULL;
         int len;
-	IPC_Auth	* auth = NULL;
-	int		one = 1;
-	GHashTable*	uidlist;
 	IPC_WaitConnection* conn_cmd = NULL;
 	IPC_WaitConnection* conn_cbk = NULL;
 
@@ -1072,6 +1102,10 @@ init_start ()
 	PILGenericIfMgmtRqst RegisterRqsts[]= {
 		{"RAExec", &RAExecFuncs, NULL, NULL, NULL},
 		{ NULL, NULL, NULL, NULL, NULL} };
+
+	if( getenv("LRMD_MAX_CHILDREN") ) {
+		set_lrmd_param("max-children", getenv("LRMD_MAX_CHILDREN"));
+	}
 
 	qsort(msg_maps, MSG_NR, sizeof(struct msg_map), msg_type_cmp);
 
@@ -1131,25 +1165,6 @@ init_start ()
 	 *the other is for create the callback channel
 	 */
 
-	uidlist = g_hash_table_new(g_direct_hash, g_direct_equal);
-	/* Add root's uid */
-	g_hash_table_insert(uidlist, GUINT_TO_POINTER(0), &one); 
-
-	pw_entry = getpwnam(HA_CCMUSER);
-	if (pw_entry == NULL) {
-		lrmd_log(LOG_ERR, "Cannot get the uid of HACCMUSER");
-	} else {
-		g_hash_table_insert(uidlist, GUINT_TO_POINTER(pw_entry->pw_uid)
-				    , &one); 
-	}
-
-	if ( NULL == (auth = MALLOCT(struct IPC_AUTH)) ) {
-		lrmd_log(LOG_ERR, "init_start: MALLOCT (IPC_AUTH) failed.");
-	} else {
-		auth->uid = uidlist;
-		auth->gid = NULL;
-	}
-
 	/*Create a waiting connection to accept command connect from client*/
 	conn_cmd_attrs = g_hash_table_new(g_str_hash, g_str_equal);
 	g_hash_table_insert(conn_cmd_attrs, path, cmd_path);
@@ -1164,8 +1179,11 @@ init_start ()
 	}
 
 	/*Create a source to handle new connect rquests for command*/
-	G_main_add_IPC_WaitConnection( G_PRIORITY_HIGH, conn_cmd, auth, FALSE,
+	G_main_add_IPC_WaitConnection( G_PRIORITY_HIGH, conn_cmd, NULL, FALSE,
 				   on_connect_cmd, conn_cmd, NULL);
+
+	/* auth is static, but used when clients register */
+	auth = ipc_str_to_auth(ADMIN_UIDS, strlen(ADMIN_UIDS), "", 0);
 
 	/*
 	 * Create a waiting connection to accept the callback connect from client
@@ -1183,7 +1201,7 @@ init_start ()
 	}
 
 	/*Create a source to handle new connect rquests for callback*/
-	G_main_add_IPC_WaitConnection( G_PRIORITY_HIGH, conn_cbk, auth, FALSE,
+	G_main_add_IPC_WaitConnection( G_PRIORITY_HIGH, conn_cbk, NULL, FALSE,
 	                               on_connect_cbk, conn_cbk, NULL);
 
 	/* our child signal handling involves calls with
@@ -1262,10 +1280,7 @@ init_start ()
 	conn_cbk->ops->destroy(conn_cbk);
 	conn_cbk = NULL;
 
-	g_hash_table_destroy(uidlist);
-	if ( NULL != auth ) {
-		free(auth);
-	}
+	ipc_destroy_auth(auth);
 	if (cl_unlock_pidfile(PID_FILE) == 0) {
 		lrmd_debug(LOG_DEBUG, "[%s] stopped", lrm_system_name);
 	}
@@ -1386,6 +1401,8 @@ on_receive_cmd (IPC_Channel* ch, gpointer user_data)
 	struct msg_map *msgmap_p, in_type;
 	lrmd_client_t* client = NULL;
 	struct ha_msg* msg = NULL;
+	char *msg_s;
+	int ret;
 
 	client = (lrmd_client_t*)user_data;
 
@@ -1404,7 +1421,7 @@ on_receive_cmd (IPC_Channel* ch, gpointer user_data)
 
 
 	/*get the message */
-	msg = msgfromIPC_noauth(ch);
+	msg = msgfromIPC(ch, 0);
 	if (NULL == msg) {
 		lrmd_log(LOG_ERR, "on_receive_cmd: can not receive messages.");
 		return TRUE;
@@ -1422,9 +1439,14 @@ on_receive_cmd (IPC_Channel* ch, gpointer user_data)
 	in_type.msg_type = ha_msg_value(msg, F_LRM_TYPE);
 	if( !in_type.msg_type ) {
 		LOG_FAILED_TO_GET_FIELD(F_LRM_TYPE);
+		ha_msg_del(msg);
 		return TRUE;
 	}
-	lrmd_debug2(LOG_DEBUG,"dumping request: %s",msg2string(msg));
+	msg_s = msg2string(msg);
+	if( msg_s ) {
+		lrmd_debug2(LOG_DEBUG,"dumping request: %s",msg_s);
+		free(msg_s);
+	}
 
 	if (!(msgmap_p = bsearch(&in_type, msg_maps,
 			MSG_NR, sizeof(struct msg_map), msg_type_cmp)
@@ -1432,8 +1454,19 @@ on_receive_cmd (IPC_Channel* ch, gpointer user_data)
 
 		lrmd_log(LOG_ERR, "on_receive_cmd: received an unknown msg");
 	} else {
-		int ret;
+		if( !client->app_name && msgmap_p->handler != on_msg_register ) {
+			ha_msg_del(msg);
+			lrmd_log(LOG_ERR, "%s: the client needs to register first", __FUNCTION__);
+			return FALSE;
+		}
 
+		if( client->priv_lvl < msgmap_p->min_priv ) {
+			ha_msg_del(msg);
+			lrmd_log(LOG_ERR, "%s: insufficient privileges for %s (pid %d)"
+			, __FUNCTION__
+			, client->app_name, client->pid);
+			return FALSE;
+		}
 		strncpy(client->lastrequest, in_type.msg_type, sizeof(client->lastrequest));
 		client->lastrequest[sizeof(client->lastrequest)-1]='\0';
 		client->lastreqstart = time(NULL);
@@ -1451,7 +1484,7 @@ on_receive_cmd (IPC_Channel* ch, gpointer user_data)
 	/*delete the msg*/
 	ha_msg_del(msg);
 
-	return TRUE;
+	return ret;
 }
 static void
 remove_repeat_op_from_client(gpointer key, gpointer value, gpointer user_data)
@@ -1586,6 +1619,14 @@ on_msg_register(lrmd_client_t* client, struct ha_msg* msg)
 			"internal client list, let remove it at first."
 		, 	client->pid);
 	}
+
+	/* everybody can connect, but only certain UIDs can perform
+	 * administrative actions
+	 */
+	if( client->ch_cmd->ops->verify_auth(client->ch_cmd, auth) == IPC_OK )
+		client->priv_lvl = PRIV_ADMIN;
+	else
+		client->priv_lvl = 0;
 
 	g_hash_table_insert(clients, (gpointer)&client->pid, client);
 	lrmd_debug(LOG_DEBUG, "on_msg_register:client %s [%d] registered"
@@ -2705,7 +2746,7 @@ add_op_to_runlist(lrmd_rsc_t* rsc, lrmd_op_t* op)
 	rsc->op_list = g_list_append(rsc->op_list, op);
 	if (g_list_length(rsc->op_list) >= 4) {
 		lrmd_log(LOG_WARNING
-		,	"operations list for %s is suspicously"
+		,	"operations list for %s is suspiciously"
 		" long [%d]"
 		,	rsc->id
 		,	g_list_length(rsc->op_list));
@@ -2780,6 +2821,11 @@ on_op_done(lrmd_rsc_t* rsc, lrmd_op_t* op)
 				to_repeatlist(rsc,op);
 		}
 	} else {
+		if (HA_OK != ha_msg_mod_int(op->msg,F_LRM_OPSTATUS,(int)LRM_OP_CANCELLED)) {
+			LOG_FAILED_TO_ADD_FIELD(F_LRM_OPSTATUS);
+			return HA_FAIL;
+		}
+		op_status = LRM_OP_CANCELLED;
 		remove_op_history(op);
 	}
 
@@ -3050,11 +3096,6 @@ perform_ra_op(lrmd_op_t* op)
 	}
 
 	op_type = ha_msg_value(op->msg, F_LRM_OP);
-	if (!op->interval || is_logmsg_due(op)) { /* log non-repeating ops */
-		lrmd_log(LOG_INFO,"rsc:%s:%d: %s",rsc->id,op->call_id,probe_str(op,op_type));
-	} else {
-		lrmd_debug(LOG_DEBUG,"rsc:%s:%d: %s",rsc->id,op->call_id,op_type);
-	}
 	op_params = ha_msg_value_str_table(op->msg, F_LRM_PARAM);
 	params = merge_str_tables(rsc->params,op_params);
 	ha_msg_mod_str_table(op->msg, F_LRM_PARAM, params);
@@ -3099,8 +3140,12 @@ perform_ra_op(lrmd_op_t* op)
 				((op->interval && !is_logmsg_due(op)) ? PT_LOGNORMAL : PT_LOGVERBOSE) : PT_LOGNONE
 			,	op, &ManagedChildTrackOps);
 
-			if (op->interval && is_logmsg_due(op)) {
-				op->t_lastlogmsg = time_longclock();
+			if (!op->interval || is_logmsg_due(op)) { /* log non-repeating ops */
+				lrmd_log(LOG_INFO,"rsc:%s %s[%d] (pid %d)",
+					rsc->id,probe_str(op,op_type),op->call_id,pid);
+			} else {
+				lrmd_debug(LOG_DEBUG,"rsc:%s %s[%d] (pid %d)",
+					rsc->id,op_type,op->call_id,pid);
 			}
 			close(stdout_fd[1]);
 			close(stderr_fd[1]);
@@ -3192,6 +3237,21 @@ perform_ra_op(lrmd_op_t* op)
 			,	"perform_ra_op:calling RA plugin to perform %s, pid: [%d]"
 			,	op_info(op), getpid());		
 			params = ha_msg_value_str_table(op->msg, F_LRM_PARAM);
+			if (replace_secret_params(rsc->id, params) < 0) {
+				/* replacing secrets failed! */
+				if (!strcmp(op_type,"stop")) {
+					/* don't fail on stop! */
+					lrmd_log(LOG_INFO
+					, "%s:%d: proceeding with the stop operation for %s"
+					, __FUNCTION__, __LINE__, rsc->id);
+				} else {
+					lrmd_log(LOG_ERR
+					, "%s:%d: failed to get secrets for %s, "
+					"considering resource not configured"
+					, __FUNCTION__, __LINE__, rsc->id);
+					exit(EXECRA_NOT_CONFIGURED);
+				}
+			}
 			RAExec->execra (rsc->id,
 					rsc->type,
 					rsc->provider,
@@ -3289,8 +3349,8 @@ on_ra_proc_finished(ProcTrack* p, int status, int signo, int exitcode
 
 	if( signo ) {
 		if( proctrack_timedout(p) ) {
-			lrmd_log(LOG_WARNING,	"%s: pid [%d] timed out"
-			, op_info(op), proctrack_pid(p));
+			lrmd_log(LOG_WARNING,	"%s: pid %d timed out"
+			, small_op_info(op), proctrack_pid(p));
 			op_status = LRM_OP_TIMEOUT;
 		} else {
 			op_status = LRM_OP_ERROR;
@@ -3298,20 +3358,16 @@ on_ra_proc_finished(ProcTrack* p, int status, int signo, int exitcode
 	} else {
 		rc = RAExec->map_ra_retvalue(exitcode, op_type
 						 , op->first_line_ra_stdout);
-		if (rc != EXECRA_OK || debug_level > 0) {
+		if (!op->interval || is_logmsg_due(op) || debug_level > 0) { /* log non-repeating ops */
 			if (rc == exitcode) {
-				lrmd_debug2(rc == EXECRA_OK ? LOG_DEBUG : LOG_INFO
-				,	"%s: pid [%d] exited with"
-				" return code %d", op_info(op), proctrack_pid(p), rc);
+				lrmd_log(LOG_INFO
+				,	"%s: pid %d exited with"
+				" return code %d", small_op_info(op), proctrack_pid(p), rc);
 			}else{
-				lrmd_debug2(rc == EXECRA_OK ? LOG_DEBUG : LOG_INFO
-				,	"%s: pid [%d] exited with"
+				lrmd_log(LOG_INFO
+				,	"%s: pid %d exited with"
 				" return code %d (mapped from %d)"
-				,	op_info(op), proctrack_pid(p), rc, exitcode);
-			}
-			if (rc != EXECRA_OK || debug_level > 1) {
-				lrmd_debug2(LOG_INFO, "Resource Agent output: [%s]"
-				,	op->first_line_ra_stdout);
+				,	small_op_info(op), proctrack_pid(p), rc, exitcode);
 			}
 		}
 		if (EXECRA_EXEC_UNKNOWN_ERROR == rc || EXECRA_NO_RA == rc) {
@@ -3321,6 +3377,9 @@ on_ra_proc_finished(ProcTrack* p, int status, int signo, int exitcode
 		} else {
 			op_status = LRM_OP_DONE;
 		}
+	}
+	if (op->interval && is_logmsg_due(op)) {
+		op->t_lastlogmsg = time_longclock();
 	}
 	if (HA_OK !=
 			ha_msg_mod_int(op->msg, F_LRM_OPSTATUS, op_status)) {
@@ -3895,11 +3954,17 @@ gen_op_info(const lrmd_op_t* op, gboolean add_params)
 		,op->call_id ,op->client_id);
 
 	}else{
-		snprintf(info, sizeof(info)
-		,"operation %s[%d] on %s::%s::%s for client %d"
-		,lrm_str(op_type), op->call_id
-		,lrm_str(rsc->class), lrm_str(rsc->type), lrm_str(rsc->id)
-		,op->client_id);
+		if (op->exec_pid > 1) {
+			snprintf(info, sizeof(info)
+			,"operation %s[%d] with pid %d on %s for client %d"
+			,lrm_str(op_type), op->call_id, op->exec_pid, lrm_str(rsc->id)
+			,op->client_id);
+		} else {
+			snprintf(info, sizeof(info)
+			,"operation %s[%d] on %s for client %d"
+			,lrm_str(op_type), op->call_id, lrm_str(rsc->id)
+			,op->client_id);
+		}
 
 		if( add_params ) {
 			param_gstr = g_string_new("");
@@ -3942,14 +4007,18 @@ static void
 check_queue_duration(lrmd_op_t* op)
 {
 	unsigned long t_stay_in_list = 0;
+	static struct msg_ctrl *ml;
+
 	CHECK_ALLOCATED(op, "op", );
 	t_stay_in_list = longclockto_ms(op->t_perform - op->t_addtolist);
-	if ( t_stay_in_list > WARNINGTIME_IN_LIST) 
+	if ( t_stay_in_list > WARNINGTIME_IN_LIST)
 	{
-		lrmd_log(LOG_WARNING
-		,	"perform_ra_op: the operation %s stayed in operation "
+		if (!ml)
+			ml = cl_limit_log_new(logmsg_ctrl_defs + OP_STAYED_TOO_LONG);
+		cl_limit_log(ml, LOG_WARNING
+		,	"perform_ra_op: the %s stayed in operation "
 			"list for %lu ms (longer than %d ms)"
-		,	op_info(op), t_stay_in_list
+		,	small_op_info(op), t_stay_in_list
 		,	WARNINGTIME_IN_LIST
 		);
 		if (debug_level >= 2) {

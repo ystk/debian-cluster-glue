@@ -15,13 +15,14 @@
 
 Name:		cluster-glue
 Summary:	Reusable cluster components
-Version:	1.0.6
+Version:	1.0.9
 Release:	1%{?dist}
 License:	GPLv2+ and LGPLv2+
 Url:		http://www.linux-ha.org/wiki/Cluster_Glue
 Group:		System Environment/Base
 Source0:	cluster-glue.tar.bz2
 Requires:	perl-TimeDate
+Requires:	cluster-glue-libs = %{version}-%{release}
 
 # Directives to allow upgrade from combined heartbeat packages in Fedora11
 Provides:       heartbeat-stonith = 3.0.0-1
@@ -120,6 +121,7 @@ standards, and an interface to common STONITH devices.
 %{_sbindir}/ha_logger
 %{_sbindir}/hb_report
 %{_sbindir}/lrmadmin
+%{_sbindir}/cibsecret
 %{_sbindir}/meatclient
 %{_sbindir}/stonith
 %{_sbindir}/sbd
@@ -159,7 +161,6 @@ standards, and an interface to common STONITH devices.
 %package -n cluster-glue-libs
 Summary:	Reusable cluster libraries
 Group:		Development/Libraries
-Requires:	%{name} = %{version}-%{release}
 Obsoletes:	libheartbeat2
 
 %description -n cluster-glue-libs
@@ -188,7 +189,6 @@ exit 0
 %package -n cluster-glue-libs-devel 
 Summary:	Headers and libraries for writing cluster managers
 Group:		Development/Libraries
-Requires:	%{name} = %{version}-%{release}
 Requires:	cluster-glue-libs = %{version}-%{release}
 Obsoletes:	libheartbeat-devel
 
