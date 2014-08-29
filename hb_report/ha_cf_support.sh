@@ -59,7 +59,7 @@ getlogvars() {
 		HA_LOGLEVEL="debug"
 	if uselogd; then
 		[ -f "$LOGD_CF" ] || {
-			info "logd used but logd.cf not found: using defaults"
+			debug "logd used but logd.cf not found: using defaults"
 			return  # no configuration: use defaults
 		}
 		debug "reading log settings from $LOGD_CF"
@@ -76,7 +76,8 @@ essential_files() {
 	cat<<EOF
 d $HA_VARLIB 0755 root root
 d $HA_VARLIB/ccm 0750 hacluster haclient
-d `dirname $HA_VARLIB`/pengine 0750 hacluster haclient
-d $HA_VARLIB/crm 0750 hacluster haclient
+d $PCMK_LIB 0755 root root
+d $PE_STATE_DIR 0750 hacluster haclient
+d $CIB_DIR 0750 hacluster haclient
 EOF
 }

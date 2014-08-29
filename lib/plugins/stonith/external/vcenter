@@ -25,7 +25,7 @@ sub dielog {
 # Define command groups
 my @configCommands = qw{getconfignames getinfo-devid getinfo-devname getinfo-devdescr getinfo-devurl getinfo-xml};
 my @actionCommands = qw{reset on off};
-my @netCommands = (@actionCommands, qw{status gethosts});
+my @netCommands = (@actionCommands, qw{status gethosts listvms});
 
 # Process command line arguments
 my $command = $ARGV[0] || dielog("No command specified\n");
@@ -161,7 +161,10 @@ elsif ($command ~~ @netCommands) {
 			eval {
 				# VI API: searches the inventory tree for a VirtualMachine managed entity whose name matches
 				# the name of the virtual machine assigned to the target host in HOSTLIST
-				$vm = Vim::find_entity_view(view_type => "VirtualMachine", filter => { name => qr/\Q$host_to_vm{$targetHost}\E/i });
+				$vm = Vim::find_entity_view(view_type => "VirtualMachine", filter => { name => qr/^\Q$host_to_vm{$targetHost}\E/i });
+				if (!defined $vm) {
+					dielog("Machine $targetHost was not found");
+ 				}
 
 				# VI API: retrieves the properties of the managed object reference runtime.host of the VirtualMachine
 				# managed entity obtained by the previous command
@@ -229,28 +232,28 @@ elsif ($command ~~ @netCommands) {
 	} else {
 	# Command belongs to the group of commands that lookup the status of VMware vCenter and/or virtual machines
 		if ($command eq "status") {
+			# we already connect to the vcenter, no need to do
+			# anything else in status
+			;
+		}
+		elsif ($command eq "gethosts") {
+                        foreach my $key (keys(%host_to_vm)) {
+                                print "$key \n";
+                        }
+		}
+		elsif ($command eq "listvms") {
 			eval {
 				# VI API: Searches the inventory tree for all VirtualMachine managed objects
 				my $vms = Vim::find_entity_views(view_type => "VirtualMachine");
+				if (defined $vms) {
+					printf(STDERR "%-50s    %-20s\n", "VM Name", "Power state");
+					print STDERR "-" x 70 . "\n";
+					foreach my $vm (@$vms) {
+					my $powerState = $vm->get_property('runtime.powerState')->val;
+						printf("%-50s    %-20s\n", $vm->{name}, $powerState);
+					}
+				}
 			};
-			if ($@) {
-				if (ref($@) eq "SoapFault") { dielog("$@->detail\n"); }
-				dielog($@);
-			}
-		}
-		elsif ($command eq "gethosts") {
-			# Create a regular expression to make vCenter find all the virtual machine matching
-			# mirtual machine names specified in HOSTLIST
-			# NOTE: this implementation make "gethosts" check that entries in HOSTLIST are consistent with VMware vCenter VM directory
-			my $regex = join "|", map { qr/\Q$_\E/i } values %host_to_vm;
-			eval {
-				my $vms = Vim::find_entity_views(view_type => "VirtualMachine", filter => { name => qr/^($regex)$/ });
-				foreach my $vm (@$vms) { print "$vm_to_host{(lc $vm->name)}\n" if exists $vm_to_host{(lc $vm->name)}; }
-			};
-			if ($@) {
-				if (ref($@) eq "SoapFault") { dielog("$@->detail\n"); }
-				dielog($@);
-			}
 		}
 		else { dielog("Invalid command specified: $command\n"); }
 	}

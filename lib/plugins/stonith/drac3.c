@@ -118,7 +118,7 @@ static const char *NOTpluginID = "Dell DRACIII device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_HOST_PARM \
-	XML_PARAMETER_BEGIN(ST_HOST, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_HOST, "string", "1", "1") \
 	  XML_HOST_SHORTDESC \
 	  XML_HOST_LONGDESC \
 	XML_PARAMETER_END
@@ -352,7 +352,7 @@ drac3_hostlist(StonithPlugin * s)
 	if (hl == NULL) {
 		LOG(PIL_CRIT, "%s: out of memory", __FUNCTION__);
 	} else {
-		g_strdown(hl[0]);
+		strdown(hl[0]);
 	}
 
 	return(hl);

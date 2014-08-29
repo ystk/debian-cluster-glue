@@ -3,15 +3,16 @@ Section: admin
 Priority: optional
 Maintainer: Debian HA Maintainers <debian-ha-maintainers@lists.alioth.debian.org>
 Uploaders: Martin Loschwitz <madkiss@debian.org>, Anibal Monsalve Salazar <anibal@debian.org>, Simon Horman <horms@debian.org>, Frederik Schüler <fs@debian.org>
-Build-Depends: debhelper (>= 7), libsnmp-dev, libglib2.0-dev, perl, net-tools, iputils-ping, python, psmisc, libnet1-dev, iproute, libtool, libcurl4-openssl-dev | libcurl3-openssl-dev, libxml2-dev, bison, flex, uuid-dev, lynx, libbz2-dev, zlib1g-dev, uuid-dev, libsensors4-dev | libsensors-dev, libltdl3-dev, swig, openssh-client, libgnutls-dev, python-central (>= 0.5), python-dev, libpam0g-dev, libncurses5-dev, psmisc, libopenhpi-dev, libopenipmi-dev, autoconf, automake, libtool, xsltproc, docbook-xsl, chrpath, docbook-xml, libdbus-glib-1-dev, libdbus-1-dev, help2man
-Standards-Version: 3.9.1
+Build-Depends: debhelper (>= 7), libsnmp-dev, libglib2.0-dev, perl, net-tools, iputils-ping, python (>= 2.6.6-3~), psmisc, libnet1-dev, iproute, libtool, libcurl4-openssl-dev | libcurl3-openssl-dev, libxml2-dev, bison, flex, uuid-dev, lynx, libbz2-dev, zlib1g-dev, uuid-dev, libsensors4-dev | libsensors-dev, libltdl3-dev, swig, openssh-client, libgnutls-dev, python-dev (>= 2.6.6-3~), libpam0g-dev, libncurses5-dev, psmisc, libopenhpi-dev, libopenipmi-dev, autoconf, automake, libtool, xsltproc, docbook-xsl, chrpath, docbook-xml, libdbus-glib-1-dev, libdbus-1-dev, help2man, libaio-dev, hardening-wrapper, asciidoc, libxml2-utils
+Standards-Version: 3.9.5
 Homepage: http://hg.linux-ha.org/glue/
 Vcs-Hg: http://hg.debian.org/hg/debian-ha/cluster-glue
 Vcs-Browser: http://hg.debian.org/hg/debian-ha/cluster-glue
-XS-Python-Version: current
 
 Package: libcluster-glue
 Architecture: all
+Section: oldlibs
+Priority: extra
 Depends: ${misc:Depends}, liblrm2 (>= ${binary:Version}), libpils2 (>= ${binary:Version}), libplumb2 (>= ${binary:Version}), libplumbgpl2 (>= ${binary:Version}), libstonith1 (>= ${binary:Version})
 Description: Reusable cluster libraries (transitional package)
  This package used to contain all the libraries from cluster-glue,
@@ -126,9 +127,10 @@ Description: Reusable cluster development files -- libstonith1
 
 Package: libcluster-glue-dev
 Architecture: all
-Section: libdevel
+Section: oldlibs
+Priority: extra
 Depends: ${misc:Depends}, liblrm2-dev (>= ${binary:Version}), libpils2-dev (>= ${binary:Version}), libplumb2-dev (>= ${binary:Version}), libplumbgpl2-dev (>= ${binary:Version}), libstonith1-dev (>= ${binary:Version})
-Description: The reusable cluster components for Linux HA (transitional package)
+Description: Reusable cluster components for Linux HA (transitional package)
  This package used to contain all the development files for the 
  libraries from cluster-glue, the reusable cluster components 
  package. It's now a transitional package without any content, 
@@ -137,10 +139,10 @@ Description: The reusable cluster components for Linux HA (transitional package)
 
 Package: cluster-glue
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, python, libtimedate-perl, liblrm2 (= ${binary:Version}), libpils2 (= ${binary:Version}), libplumb2 (= ${binary:Version}), libplumbgpl2 (= ${binary:Version}), libstonith1 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, ${python:Depends}, libtimedate-perl, liblrm2 (= ${binary:Version}), libpils2 (= ${binary:Version}), libplumb2 (= ${binary:Version}), libplumbgpl2 (= ${binary:Version}), libstonith1 (= ${binary:Version})
 Replaces: heartbeat (<= 2.99.2+sles11r9-5), heartbeat-common (<= 2.99.2+sles11r9-5), libheartbeat2 (<= 2.99.2+sles11r9-5)
 Conflicts: heartbeat (<= 2.99.2+sles11r9-5), heartbeat-common (<= 2.99.2+sles11r9-5), libheartbeat2 (<= 2.99.2+sles11r9-5)
-Description: The reusable cluster components for Linux HA
+Description: Reusable cluster components for Linux HA
  This package contains node fencing plugins, an error reporting
  utility, and other reusable cluster components from
  the Linux HA project.

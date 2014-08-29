@@ -1079,6 +1079,31 @@ emit_apphb(gpointer data)
 	return TRUE;
 }
 
+static void
+calc_max_children()
+{
+#ifdef _SC_NPROCESSORS_ONLN
+	int nprocs;
+
+	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+	if( nprocs < 1 ) {
+		lrmd_log(LOG_WARNING, "%s: couldn't get the number of processors"
+		, __FUNCTION__);
+	} else {
+		if( nprocs/2 > max_child_count ) {
+			max_child_count = nprocs/2;
+		}
+		lrmd_log(LOG_INFO, "max-children set to %d "
+		"(%d processors online)", max_child_count, nprocs);
+		return;
+	}
+#else
+	lrmd_log(LOG_WARNING, "%s: cannot get the number of processors "
+	"on this platform", __FUNCTION__);
+#endif
+	lrmd_log(LOG_INFO, "max-children set to %d", max_child_count);
+}
+
 /* main loop of the daemon*/
 int
 init_start ()
@@ -1105,6 +1130,8 @@ init_start ()
 
 	if( getenv("LRMD_MAX_CHILDREN") ) {
 		set_lrmd_param("max-children", getenv("LRMD_MAX_CHILDREN"));
+	} else {
+		calc_max_children();
 	}
 
 	qsort(msg_maps, MSG_NR, sizeof(struct msg_map), msg_type_cmp);
@@ -1402,7 +1429,7 @@ on_receive_cmd (IPC_Channel* ch, gpointer user_data)
 	lrmd_client_t* client = NULL;
 	struct ha_msg* msg = NULL;
 	char *msg_s;
-	int ret;
+	int ret = FALSE;
 
 	client = (lrmd_client_t*)user_data;
 
@@ -1574,7 +1601,6 @@ on_repeat_op_readytorun(gpointer data)
 
 	rsc->repeat_op_list = g_list_remove(rsc->repeat_op_list, op);
 	if (op->repeat_timeout_tag != 0) {
-		Gmain_timeout_remove(op->repeat_timeout_tag);
 		op->repeat_timeout_tag = (guint)0;
 	}
 
@@ -2905,7 +2931,6 @@ rsc_execution_freeze_timeout(gpointer data)
 	}
 
 	if (rsc->delay_timeout > 0) {
-		Gmain_timeout_remove(rsc->delay_timeout);
 		rsc->delay_timeout = (guint)0;
 	}
 
@@ -3096,17 +3121,6 @@ perform_ra_op(lrmd_op_t* op)
 	}
 
 	op_type = ha_msg_value(op->msg, F_LRM_OP);
-	op_params = ha_msg_value_str_table(op->msg, F_LRM_PARAM);
-	params = merge_str_tables(rsc->params,op_params);
-	ha_msg_mod_str_table(op->msg, F_LRM_PARAM, params);
-	if (op_params) {
-		free_str_table(op_params);
-		op_params = NULL;
-	}
-	if (params) {
-		free_str_table(params);
-		params = NULL;
-	}
 	op->t_perform = time_longclock();
 	check_queue_duration(op);
 
@@ -3236,7 +3250,14 @@ perform_ra_op(lrmd_op_t* op)
 			lrmd_debug2(LOG_DEBUG
 			,	"perform_ra_op:calling RA plugin to perform %s, pid: [%d]"
 			,	op_info(op), getpid());		
-			params = ha_msg_value_str_table(op->msg, F_LRM_PARAM);
+
+			op_params = ha_msg_value_str_table(op->msg, F_LRM_PARAM);
+			params = merge_str_tables(rsc->params,op_params);
+			if (op_params) {
+				free_str_table(op_params);
+				op_params = NULL;
+			}
+
 			if (replace_secret_params(rsc->id, params) < 0) {
 				/* replacing secrets failed! */
 				if (!strcmp(op_type,"stop")) {
@@ -3472,6 +3493,9 @@ set_lrmd_param(const char *name, const char *value)
 			lrmd_log(LOG_ERR, "%s: invalid value for lrmd parameter %s"
 				, __FUNCTION__, name);
 			return HA_FAIL;
+		} else if (ival == max_child_count) {
+			lrmd_log(LOG_INFO, "max-children already set to %d", ival);
+			return HA_OK;
 		}
 		lrmd_log(LOG_INFO, "setting max-children to %d", ival);
 		max_child_count = ival;

@@ -37,7 +37,6 @@ usr/lib/stonith/plugins/stonith2/wti_mpc.so
 var/*
 usr/sbin/stonith
 usr/sbin/meatclient
-usr/sbin/sbd
 usr/sbin/lrmadmin
 usr/sbin/ha_logger
 usr/sbin/hb_report
@@ -78,7 +77,6 @@ usr/share/cluster-glue/lrmtest/LRMBasicSanityCheck
 usr/share/cluster-glue/lrmtest/regression.sh
 usr/share/cluster-glue/lrmtest/evaltest.sh
 usr/share/cluster-glue/lrmtest/lrmregtest
-usr/share/cluster-glue/lrmtest/lrmregtest-heartbeat
 usr/share/cluster-glue/lrmtest/lrmregtest-lsb
 usr/share/cluster-glue/utillib.sh
 usr/share/cluster-glue/ha_cf_support.sh
@@ -94,3 +92,11 @@ usr/share/man/man8/ha_logd.8
 usr/share/man/man8/stonith.8
 usr/share/man/man8/lrmadmin.8
 usr/sbin/cibsecret
+usr/share/cluster-glue/lrmtest/testcases/stonith.exp
+usr/share/cluster-glue/lrmtest/testcases/stonith 
+usr/lib/heartbeat/plugins/compress/zlib.so
+usr/lib/heartbeat/plugins/compress/bz2.a 
+usr/lib/heartbeat/plugins/compress/bz2.la 
+usr/lib/heartbeat/plugins/compress/zlib.a 
+usr/lib/heartbeat/plugins/compress/zlib.la 
+usr/lib/heartbeat/plugins/compress/bz2.so 

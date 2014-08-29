@@ -125,7 +125,7 @@ static const char * NOTpluginID = "RHCS device has been destroyed";
 /* Run the command with op and return the exit status + the output 
  * (NULL -> discard output) */
 static int rhcs_run_cmd(struct pluginDevice *sd, const char *op, 
-		char **output);
+		const char *host, char **output);
 /* Just free up the configuration and the memory, if any */
 static void rhcs_unconfig(struct pluginDevice *sd);
 
@@ -149,7 +149,7 @@ rhcs_status(StonithPlugin  *s)
 		return(S_OOPS);
 	}
 	
-	rc = rhcs_run_cmd(sd, op, &output);
+	rc = rhcs_run_cmd(sd, op, NULL, &output);
 	if (rc != 0) {
 		LOG(PIL_CRIT, "%s: '%s %s' failed with rc %d",
 			__FUNCTION__, sd->subplugin, op, rc);
@@ -174,6 +174,8 @@ get_num_tokens(char *str)
 {
 	int namecount = 0;
 
+	if (!str)
+		return namecount;
 	while (*str != EOS) {
 		str += strspn(str, WHITESPACE);
 		if (*str == EOS)
@@ -248,7 +250,6 @@ rhcs_reset_req(StonithPlugin * s, int request, const char * host)
 	const char *		op;
 	int			rc;
 	char *			output = NULL;
-	char *k, *v;
 	
 	if (Debug) {
 		LOG(PIL_DEBUG, "%s: called.", __FUNCTION__);
@@ -286,13 +287,7 @@ rhcs_reset_req(StonithPlugin * s, int request, const char * host)
 			break;
 	}
 	
-	k = g_strdup("nodename");
-	v = g_strdup(host);
-	g_hash_table_insert(sd->cmd_opts, k, v);
-	rc = rhcs_run_cmd(sd, op, &output);
-	g_hash_table_remove(sd->cmd_opts, k);
-	g_free(k);
-	g_free(v);
+	rc = rhcs_run_cmd(sd, op, host, &output);
 	if (rc != 0) {
 		LOG(PIL_CRIT, "%s: '%s %s' for host %s failed with rc %d",
 			__FUNCTION__, sd->subplugin, op, host, rc);
@@ -329,6 +324,9 @@ rhcs_parse_config_info(struct pluginDevice* sd, StonithNVpair * info)
 	/* TODO: Maybe treat "" as delimeters too so
 	 * whitespace can be passed to the plugins... */
 	for (nv = info; nv->s_name; nv++) {
+		if (!nv->s_name || !nv->s_value) {
+			continue;
+		}
 		key = STRDUP(nv->s_name);
 		if (!key) {
 			goto err_mem;
@@ -475,7 +473,7 @@ load_metadata(struct pluginDevice *	sd)
 		LOG(PIL_DEBUG, "%s: called.", __FUNCTION__);
 	}
 
-	rc = rhcs_run_cmd(sd, op, &ret);
+	rc = rhcs_run_cmd(sd, op, NULL, &ret);
 	if (rc != 0) {
 		LOG(PIL_CRIT, "%s: '%s %s' failed with rc %d",
 			__FUNCTION__, sd->subplugin, op, rc);
@@ -853,30 +851,35 @@ rhcs_new(const char *subplugin)
 #define MAXLINE 512
 
 static void
-rhcs_print_var(gpointer key, gpointer value, gpointer user_data)
+printparam_to_fd(int fd, const char *key, const char *value)
 {
-	int fd = GPOINTER_TO_UINT(user_data);
 	char arg[MAXLINE];
 	int cnt;
 
-	cnt = snprintf(arg, MAXLINE, "%s=%s\n", (char *)key, (char *)value);
+	cnt = snprintf(arg, MAXLINE, "%s=%s\n", key, value);
 	if (cnt <= 0 || cnt >= MAXLINE) {
 		LOG(PIL_CRIT, "%s: param/value pair too large", __FUNCTION__);
 		return;
 	}
 	if (Debug) {
-		LOG(PIL_DEBUG, "set rhcs plugin param '%s=%s'", (char *)key, (char *)value);
+		LOG(PIL_DEBUG, "set rhcs plugin param '%s=%s'", key, value);
 	}
 	if (write(fd, arg, cnt) < 0) {
 		LOG(PIL_CRIT, "%s: write: %m", __FUNCTION__);
 	}
 }
 
+static void
+rhcs_print_var(gpointer key, gpointer value, gpointer user_data)
+{
+	printparam_to_fd(GPOINTER_TO_UINT(user_data), (char *)key, (char *)value);
+}
+
 /* Run the command with op as command line argument(s) and return the exit
  * status + the output */
 
 static int 
-rhcs_run_cmd(struct pluginDevice *sd, const char *op, char **output)
+rhcs_run_cmd(struct pluginDevice *sd, const char *op, const char *host, char **output)
 {
 	const int		BUFF_LEN=4096;
 	char			buff[BUFF_LEN];
@@ -934,6 +937,10 @@ rhcs_run_cmd(struct pluginDevice *sd, const char *op, char **output)
 		close(fd2[1]);
 
 		if (sd->cmd_opts) {
+			printparam_to_fd(fd1[1], "agent", sd->subplugin);
+			printparam_to_fd(fd1[1], "action", op);
+			if( host )
+				printparam_to_fd(fd1[1], "nodename", host);
 			g_hash_table_foreach(sd->cmd_opts, rhcs_print_var,
 				GUINT_TO_POINTER(fd1[1]));
 		}
@@ -994,7 +1001,9 @@ rhcs_run_cmd(struct pluginDevice *sd, const char *op, char **output)
 		if (dup(fd2[1]) < 0)
 			goto err;
 		close(fd2[1]);
-		if (execlp(cmd, cmd, "-o", op, NULL) < 0) {
+		rc = sd->cmd_opts ?
+			execlp(cmd, cmd, NULL) : execlp(cmd, cmd, "-o", op, NULL);
+		if (rc < 0) {
 			LOG(PIL_CRIT, "%s: Calling '%s' failed: %m",
 				__FUNCTION__, cmd);
 		}

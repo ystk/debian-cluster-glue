@@ -32,6 +32,8 @@
 # Default-Stop: 0 1 6
 ### END INIT INFO
 
+. /lib/lsb/init-functions
+
 LOGD_CFG=/etc/logd.cf
 LOGD_OPT=""
 [ -f "$LOGD_CFG" ] && LOGD_OPT="-c $LOGD_CFG"

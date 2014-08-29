@@ -1,3 +1,32 @@
+cluster-glue (1.0.12~rc1+hg2777-1) unstable; urgency=medium
+
+  * New upstream release, upload to unstable
+  * debian/cluster-glue.logd.init: Add reference to lsb functions file
+  * debian/control: Bump Standards-Version
+
+ -- Martin Loschwitz <madkiss@debian.org>  Fri, 21 Feb 2014 11:48:44 +0000
+
+cluster-glue (1.0.11+hg2754-1.1) experimental; urgency=low
+
+  * Non-maintainer upload.
+  * Convert to dh_python2 (Closes: #616777).
+
+ -- Luca Falavigna <dktrkranz@debian.org>  Tue, 09 Jul 2013 22:29:56 +0200
+
+cluster-glue (1.0.11+hg2754-1) experimental; urgency=low
+
+  * New upstream version
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 20 Mar 2013 21:55:32 +0000
+
+cluster-glue (1.0.10+hg2722-1) unstable; urgency=low
+
+  * New upstream version
+  * debian/control: added libaio-dev to Build-Depends
+  * debian/rules: enable hardening
+ 
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 09 Oct 2012 10:31:49 +0000
+
 cluster-glue (1.0.9+hg2665-1) unstable; urgency=low
 
   * Update to latest upstream mercurial tip; includes a fix for the IPMI

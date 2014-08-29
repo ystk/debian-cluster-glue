@@ -138,7 +138,7 @@ static const char * NOTpluginid = "VACM device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_NEXXUS_PARM \
-	XML_PARAMETER_BEGIN(ST_NEXXUS, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_NEXXUS, "string", "1", "1") \
 	  XML_NEXXUS_SHORTDESC \
 	  XML_NEXXUS_LONGDESC \
 	XML_PARAMETER_END
@@ -262,7 +262,7 @@ vacm_hostlist(StonithPlugin *s)
                stonith_free_hostlist(hlst);
                return NULL;
 	    }
-            g_strdown(hlst[hrcnt]);
+            strdown(hlst[hrcnt]);
             hrcnt++;
          }
       }else {

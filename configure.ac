@@ -19,7 +19,7 @@ dnl     checks for compiler characteristics
 dnl     checks for library functions
 dnl     checks for system services
 
-AC_INIT(cluster-glue, 1.0.9, linux-ha-dev@lists.linux-ha.org)
+AC_INIT(cluster-glue, 1.0.12-rc1, linux-ha-dev@lists.linux-ha.org)
 
 FEATURES=""
 HB_PKG=heartbeat
@@ -88,7 +88,7 @@ dnl ===============================================
 cc_supports_flag() {
          local CFLAGS="$@"
          AC_MSG_CHECKING(whether $CC supports "$@")
-         AC_COMPILE_IFELSE([int main(){return 0;}] ,[RC=0; AC_MSG_RESULT(yes)],[RC=1; AC_MSG_RESULT(no)])
+         AC_COMPILE_IFELSE([AC_LANG_SOURCE(int main(){return 0;})] ,[RC=0; AC_MSG_RESULT(yes)],[RC=1; AC_MSG_RESULT(no)])
          return $RC
 }
 
@@ -456,9 +456,10 @@ AC_SUBST(GLUE_BUILD_VERSION)
 
 dnl check byte order
 AC_MSG_CHECKING(for byteorder)
-AC_TRY_RUN(`cat $srcdir/config/byteorder_test.c`,
+AC_C_BIGENDIAN(
+[AC_MSG_RESULT(big-endian); AC_DEFINE(CONFIG_BIG_ENDIAN, 1, [big-endian])],
 [AC_MSG_RESULT(little-endian); AC_DEFINE(CONFIG_LITTLE_ENDIAN, 1, [little-endian])],
-[AC_MSG_RESULT(big-endian); AC_DEFINE(CONFIG_BIG_ENDIAN, 1, [big-endian])],)
+)
 
 
 dnl ===============================================
@@ -492,11 +493,20 @@ AC_PATH_PROGS(EGREP, egrep)
 AC_PATH_PROGS(PKGCONFIG, pkg-config)
 AC_PATH_PROGS(XML2CONFIG, xml2-config)
 
-AC_PATH_PROGS(XSLTPROC, xsltproc)
-AM_CONDITIONAL(BUILD_DOC, test "x$XSLTPROC" != "x" )
-if test "x$XSLTPROC" = "x"; then
-   AC_MSG_WARN([xsltproc not installed, unable to (re-)build manual pages])
+AC_ARG_ENABLE([doc],
+ AS_HELP_STRING([--enable-doc], [build documentation (default is yes)]),
+ [], [enable_doc=yes])
+if test "x$enable_doc" != "xno"; then
+       AC_PATH_PROGS(XSLTPROC, xsltproc)
+       if test "x$XSLTPROC" = "x"; then
+           AC_MSG_WARN([xsltproc not installed, unable to (re-)build manual pages])
+       fi
+       AC_PATH_PROGS(ASCIIDOC, asciidoc)
+       if test "x$ASCIIDOC" = "x"; then
+           AC_MSG_WARN([asciidoc not installed, unable to (re-)build manual pages])
+       fi
 fi
+AM_CONDITIONAL(BUILD_DOC, test "x$XSLTPROC" != "x" )
 
 AC_PATH_PROGS(VALGRIND_BIN, valgrind, /usr/bin/valgrind)
 AC_DEFINE_UNQUOTED(VALGRIND_BIN, "$VALGRIND_BIN", Valgrind command)
@@ -928,7 +938,7 @@ dnl ========================================================================
 
 AC_ARG_ENABLE([libnet],
  [  --enable-libnet 	Use libnet for ARP based funcationality, [default=try]], 
- [enable_libnet=$withval], [enable_libnet=try])
+ [], [enable_libnet=try])
 
 libnet=""
 libnet_version="none"
@@ -1037,7 +1047,7 @@ elif test "x${ac_cv_header_net_snmp_net_snmp_config_h}" = "xyes"; then
 		ENABLE_SNMP="no"
 	else
 		AC_MSG_CHECKING(for special snmp libraries)
-		SNMPLIB=`net-snmp-config --libs`
+		SNMPLIB=`${SNMPCONFIG} --libs`
 		AC_MSG_RESULT($SNMPLIB)
 	fi
 elif test "x${ac_cv_header_ucd_snmp_snmp_h}" = "xyes"; then
@@ -1090,15 +1100,27 @@ AM_CONDITIONAL(USE_OPENHPI, test "$ac_cv_header_openhpi_SaHpi_h" = yes && pkg-co
 AM_CONDITIONAL(IPMILAN_BUILD, test "X$enable_ipmilan" = "Xyes")
 
 dnl ========================================================================
-dnl    BZ2
+dnl    ZLIB and BZ2
 dnl ========================================================================
 
-AC_CHECK_HEADERS(bzlib.h)
-AC_CHECK_LIB(bz2, BZ2_bzBuffToBuffCompress)
-
-if test x$ac_cv_lib_bz2_BZ2_bzBuffToBuffCompress != xyes ; then
-   AC_MSG_ERROR(BZ2 libraries not found)
+dnl check if header file and lib are there for zlib
+zlib_installed="yes"
+AC_CHECK_HEADERS(zlib.h, , [zlib_installed="no"],)
+AC_CHECK_LIB(z, compress , , [zlib_installed="no"])
+AM_CONDITIONAL(BUILD_ZLIB_COMPRESS_MODULE, test "x${zlib_installed}" = "xyes")
+if test "x${zlib_installed}" = "xno"; then
+	FatalMissingThing "zlib" \
+	  "The zlib library is missing"
 fi
+
+bz2_installed="yes"
+AC_CHECK_HEADERS(bzlib.h, , [bz2_installed="no"],)
+AC_CHECK_LIB(bz2, BZ2_bzBuffToBuffCompress , , [bz2_installed="no"])
+AM_CONDITIONAL(BUILD_BZ2_COMPRESS_MODULE, test "x${bz2_installed}" = "xyes")
+
+#if test x$ac_cv_lib_bz2_BZ2_bzBuffToBuffCompress != xyes ; then
+#   AC_MSG_ERROR(BZ2 libraries not found)
+#fi
 
 if test x$ac_cv_header_bzlib_h != xyes; then
    AC_MSG_ERROR(BZ2 Development headers not found)
@@ -1179,7 +1201,7 @@ if test "$GCC" != yes; then
         CFLAGS="$CFLAGS -g"
 	enable_fatal_warnings=no
 else
-        CFLAGS="$CFLAGS -ggdb3 -O0"
+        CFLAGS="$CFLAGS -ggdb"
 
 	# We had to eliminate -Wnested-externs because of libtool changes
         EXTRA_FLAGS="-fgnu89-inline
@@ -1324,6 +1346,7 @@ lib/Makefile							\
    lib/lrm/Makefile						\
    lib/plugins/Makefile						\
       lib/plugins/InterfaceMgr/Makefile				\
+      lib/plugins/compress/Makefile					\
       lib/plugins/lrm/Makefile					\
          lib/plugins/lrm/dbus/Makefile				\
       lib/plugins/stonith/Makefile				\
@@ -1341,8 +1364,6 @@ lrm/Makefile					        	\
    lrm/test/Makefile				        	\
    lrm/test/regression.sh					\
    lrm/test/lrmregtest						\
-   lrm/test/lrmregtest-lsb					\
-   lrm/test/lrmregtest-heartbeat				\
    lrm/test/LRMBasicSanityCheck			        	\
    lrm/test/testcases/Makefile			        	\
 logd/Makefile					        	\

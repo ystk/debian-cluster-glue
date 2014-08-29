@@ -1,0 +1,12 @@
+diff -ruN Reusable-Cluster-Components-glue--b5f160509785.bak/logd/logd.in Reusable-Cluster-Components-glue--b5f160509785/logd/logd.in
+--- Reusable-Cluster-Components-glue--b5f160509785.bak/logd/logd.in	2013-10-31 12:09:50.000000000 +0000
++++ Reusable-Cluster-Components-glue--b5f160509785/logd/logd.in	2014-02-21 11:57:33.320264663 +0000
+@@ -32,6 +32,8 @@
+ # Default-Stop: 0 1 6
+ ### END INIT INFO
+ 
++. /lib/lsb/init-functions
++
+ LOGD_CFG=@sysconfdir@/logd.cf
+ LOGD_OPT=""
+ [ -f "$LOGD_CFG" ] && LOGD_OPT="-c $LOGD_CFG"

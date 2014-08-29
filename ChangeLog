@@ -1,3 +1,67 @@
+* Thu Sep 26 2013 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- release candidate 1.0.12-rc1
+- clplumbing: increase listen backlog to 128
+- hb_report: add -X option for extra ssh options
+- hb_report: add support for the rfc5424 syslog date format
+- stonith: external/libvirt: fix exit code in reset
+- stonith: external/vcenter: do not list vms in status
+  (bnc#825765)
+- stonith: fix memory leak in external.c
+- hb_report: enable ssh to prompt for passwords (bnc#808373)
+- hb_report: collect RA trace files
+- hb_report: look for nodes in the archived CIB if pacemaker is
+  not running
+- sbd plugin now lives at http://hg.linux-ha.org/sbd/
+- stonith: if debug's not set, do not send debug messages to the
+  logger (bnc#792124)
+- stonith: log status message at the debug level (bnc#792124)
+- stonith: don't always log debug level messages (bnc#792124)
+- stonith: external/vcenter: fix gethosts to produce list of
+  nodes not vms (bnc#792704)
+
+* Mon Oct 15 2012 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.11
+- lrmd: set max-children depending on the number of processors
+- lrmd: don't send parameters from ops back to crmd
+- stonith: external/libvirt: support for reboot reset method
+- hb_report: node's type got optional
+- hb_report: make use of bash trace features
+- hb_report: compatibility code for pacemaker v1.1.8
+- build: link libstonith with stonith2 agents
+
+* Mon Jul 16 2012 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.10
+- clplumbing: ipc: fix message size checks (bnc#752231)
+- clplumbing: load bz2 compression module by default
+- clplumbing: cl_msg: try compressing message before rejecting it
+  as too big
+- clplumbing: cl_msg: don't use traditional compression by default
+- clplumbing: cl_msg: increase compression threshold
+- clplumbing: fix memleak for Gmain_timeout
+- LRM: lrmd: add basic authentication (lf#2547)
+- LRM: lrmd: use the resource timeout as an override to the
+  default dbus timeout for upstart RA
+- LRM: lrmd: if set, get max-children from the LRMD_MAX_CHILDREN
+  environment var
+- stonith: add CRM stonith resource name to log messages (bnc#728579)
+- stonith: adjust timeouts in the meta-data template (bnc#733337)
+- stonith: external/vcenter: return list of configured hosts on
+  gethosts
+- stonith: external/libvirt: add more search strings for domain
+  start and stop
+- stonith: rhcs: pass the action via stdin too
+- stonith: rhcs: avoid false error if parameter isn't set
+- logd: remove runlevel 4 from the LSB info section in the logd
+  init script (bnc#744120)
+- logd: add try-restart action to the logd init script
+- sbd: Use async IO for disk reads to increase resilience against
+  hung IO (bnc#738295)
+- sbd: Handle IO errors during slot allocation properly (bnc#753559)
+- sbd: Debug mode added (bnc#753559, bnc#738295)
+- hb_report: improve performance
+- hb_report: get corosync blackbox records if available
+- hb_report: add node time information
+
 * Mon Nov 28 2011 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
 - stable release 1.0.9
 - stonith: external/ipmi: add missing double quote

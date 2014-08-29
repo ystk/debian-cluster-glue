@@ -134,7 +134,7 @@ static const char * NOTpluginid = "IPMI-LAN device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_HOSTNAME_PARM \
-	XML_PARAMETER_BEGIN(ST_HOSTNAME, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_HOSTNAME, "string", "1", "1") \
 	  XML_HOSTNAME_SHORTDESC \
 	  XML_HOSTNAME_LONGDESC \
 	XML_PARAMETER_END
@@ -150,7 +150,7 @@ static const char * NOTpluginid = "IPMI-LAN device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_PORT_PARM \
-	XML_PARAMETER_BEGIN(ST_PORT, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_PORT, "string", "1", "0") \
 	  XML_PORT_SHORTDESC \
 	  XML_PORT_LONGDESC \
 	XML_PARAMETER_END
@@ -166,7 +166,7 @@ static const char * NOTpluginid = "IPMI-LAN device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_AUTH_PARM \
-	XML_PARAMETER_BEGIN(ST_AUTH, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_AUTH, "string", "1", "0") \
 	  XML_AUTH_SHORTDESC \
 	  XML_AUTH_LONGDESC \
 	XML_PARAMETER_END
@@ -182,7 +182,7 @@ static const char * NOTpluginid = "IPMI-LAN device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_PRIV_PARM \
-	XML_PARAMETER_BEGIN(ST_PRIV, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_PRIV, "string", "1", "0") \
 	  XML_PRIV_SHORTDESC \
 	  XML_PRIV_LONGDESC \
 	XML_PARAMETER_END
@@ -198,7 +198,7 @@ static const char * NOTpluginid = "IPMI-LAN device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_RESET_METHOD_PARM \
-	XML_PARAMETER_BEGIN(ST_RESET_METHOD, "string", "0") \
+	XML_PARAMETER_BEGIN(ST_RESET_METHOD, "string", "0", "0") \
 	  XML_RESET_METHOD_SHORTDESC \
 	  XML_RESET_METHOD_LONGDESC \
 	XML_PARAMETER_END
@@ -323,7 +323,7 @@ ipmilan_hostlist(StonithPlugin  *s)
 			ret = NULL;
 			break;
 		}
-		g_strdown(ret[j]);
+		strdown(ret[j]);
 	}
 
 	return(ret);
@@ -576,6 +576,7 @@ ipmilan_new(const char *subplugin)
 		LOG(PIL_CRIT, "out of memory");
 		return(NULL);
 	}
+	LOG(PIL_WARN, "The ipmilan stonith plugin is deprecated! Please use external/ipmi.");
 	memset(nd, 0, sizeof(*nd));
 	nd->pluginid = pluginid;
 	nd->hostlist = NULL;

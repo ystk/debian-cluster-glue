@@ -268,7 +268,7 @@ static const char * NOTrcd_serialID = "RCD_Serial device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_DTRRTS_PARM \
-	XML_PARAMETER_BEGIN(ST_DTRRTS, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_DTRRTS, "string", "1", "0") \
 	  XML_DTRRTS_SHORTDESC \
 	  XML_DTRRTS_LONGDESC \
 	XML_PARAMETER_END
@@ -284,7 +284,7 @@ static const char * NOTrcd_serialID = "RCD_Serial device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_MSDURATION_PARM \
-	XML_PARAMETER_BEGIN(ST_MSDURATION, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_MSDURATION, "string", "1", "0") \
 	  XML_MSDURATION_SHORTDESC \
 	  XML_MSDURATION_LONGDESC \
 	XML_PARAMETER_END
@@ -467,7 +467,7 @@ rcd_serial_set_config(StonithPlugin* s, StonithNVpair *list)
 		return S_OOPS;
 	}
 	rcd->hostlist[0] = namestocopy[0].s_value;
-	g_strdown(rcd->hostlist[0]);
+	strdown(rcd->hostlist[0]);
 	rcd->hostlist[1] = NULL;
 	rcd->hostcount = 1;
 	rcd->device = namestocopy[1].s_value;
