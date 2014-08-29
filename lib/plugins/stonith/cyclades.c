@@ -166,7 +166,7 @@ static const char * NOTpluginID = "Cyclades device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_SERIALPORT_PARM \
-	XML_PARAMETER_BEGIN(ST_SERIALPORT, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_SERIALPORT, "string", "1", "0") \
 	  XML_SERIALPORT_SHORTDESC \
 	  XML_SERIALPORT_LONGDESC \
 	XML_PARAMETER_END
@@ -341,7 +341,7 @@ cyclades_hostlist(StonithPlugin  *s)
 			if (!nm) {
 				goto out_of_memory;
 			}
-			g_strdown(nm);
+			strdown(nm);
 			NameList[numnames] = nm;
 			numnames++;
 			NameList[numnames] = NULL;

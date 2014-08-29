@@ -196,7 +196,7 @@ static const char * NOTwtiid = "OBJECT DESTROYED: (WTI RPS-10)";
 	XML_PARM_LONGDESC_END
 
 #define XML_RPS10_PARM \
-	XML_PARAMETER_BEGIN(ST_RPS10, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_RPS10, "string", "1", "1") \
 	  XML_RPS10_SHORTDESC \
 	  XML_RPS10_LONGDESC \
 	XML_PARAMETER_END
@@ -640,7 +640,7 @@ RPS_parse_config_info(struct pluginDevice* ctx, const char * info)
 		}
 		
 		ctx->controllers[ctx->unit_count].node = STRDUP(node);
-		g_strdown(ctx->controllers[ctx->unit_count].node);
+		strdown(ctx->controllers[ctx->unit_count].node);
 		ctx->controllers[ctx->unit_count].outlet_id = outlet_id;
 		ctx->unit_count++;
 

@@ -334,10 +334,10 @@ print_confignames(Stonith *s)
 void
 log_buf(int severity, char *buf)
 {
+	if (severity == LOG_DEBUG && !debug)
+		return;
 	if (log_destination == LOG_TERMINAL) {
-		if (severity != LOG_DEBUG || debug) {
-			fprintf(stderr, "%s: %s\n", prio2str(severity),buf);
-		}
+		fprintf(stderr, "%s: %s\n", prio2str(severity),buf);
 	} else {
 		cl_log(severity, "%s", buf);
 	}
@@ -685,7 +685,9 @@ main(int argc, char** argv)
 
 			if (!silent) {
 				if (rc == S_OK) {
-					log_msg(LOG_INFO, "%s device OK.", SwitchType);
+					log_msg((log_destination == LOG_TERMINAL) ?
+					LOG_INFO : LOG_DEBUG,
+					"%s device OK.", SwitchType);
 				}else{
 					/* Uh-Oh */
 					log_msg(LOG_ERR, "%s device not accessible."
@@ -715,7 +717,7 @@ main(int argc, char** argv)
 		if (optind < argc) {
 			char *nodename;
 			nodename = g_strdup(argv[optind]);
-			g_strdown(nodename);
+			strdown(nodename);
 			rc = stonith_req_reset(s, reset_type, nodename);
 			g_free(nodename);
 		}

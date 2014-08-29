@@ -29,8 +29,8 @@
 
 Name:           cluster-glue
 Summary:        Reusable cluster components
-Version:        1.0.9
-Release:        1%{?dist}
+Version:        1.0.12
+Release:        0.rc1%{?dist}
 License:        GPL v2 or later; LGPL v2.1 or later
 Url:            http://www.linux-ha.org/wiki/Cluster_Glue
 Group:		Productivity/Clustering/HA
@@ -41,6 +41,7 @@ BuildRequires:  automake autoconf libtool e2fsprogs-devel glib2-devel pkgconfig 
 BuildRequires:  libnet net-snmp-devel OpenIPMI-devel openhpi-devel
 BuildRequires:  libxslt docbook_4 docbook-xsl-stylesheets
 BuildRequires:  help2man
+BuildRequires:  asciidoc
 
 Obsoletes:	heartbeat-common
 Provides:	heartbeat-common
@@ -191,6 +192,7 @@ fi
 %dir %{_libdir}/heartbeat/plugins
 %dir %{_libdir}/heartbeat/plugins/RAExec
 %dir %{_libdir}/heartbeat/plugins/InterfaceMgr
+%dir %{_libdir}/heartbeat/plugins/compress
 
 %dir %{_libdir}/stonith
 %dir %{_libdir}/stonith/plugins
@@ -209,7 +211,6 @@ fi
 %{_sbindir}/cibsecret
 %{_sbindir}/meatclient
 %{_sbindir}/stonith
-%{_sbindir}/sbd
 
 %{_sysconfdir}/init.d/logd
 
@@ -228,6 +229,7 @@ fi
 
 %{_libdir}/heartbeat/plugins/RAExec/*.so
 %{_libdir}/heartbeat/plugins/InterfaceMgr/*.so
+%{_libdir}/heartbeat/plugins/compress/*.so
 
 %{_libdir}/stonith/plugins/external
 %{_libdir}/stonith/plugins/stonith2/*.so

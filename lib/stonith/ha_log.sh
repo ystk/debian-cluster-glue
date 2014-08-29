@@ -54,22 +54,31 @@ level_pres() {
 	esac
 }
 
+set_logtag() {
+	# add parent pid to the logtag
+	if [ "$HA_LOGTAG" ]; then
+		if [ -n "$CRM_meta_st_device_id" ]; then
+			HA_LOGTAG="$HA_LOGTAG($CRM_meta_st_device_id)[$PPID]"
+		else
+			HA_LOGTAG="$HA_LOGTAG[$PPID]"
+		fi
+	fi
+}
+
 ha_log() {
 	loglevel=$1
 	shift
 	prn_level=`level_pres $loglevel`
 	msg="$prn_level: $@"
 
-	# add parent pid to the logtag
-	if [ "$HA_LOGTAG" ]; then
-		HA_LOGTAG="$HA_LOGTAG[$PPID]"
+	if [ "x$HA_debug" = "x0" -a "x$loglevel" = xdebug ] ; then
+		return 0
 	fi
+
+	set_logtag
 
 	# if we're connected to a tty, then output to stderr
 	if tty >/dev/null; then
-		if [ "x$HA_debug" = "x0" -a "x$loglevel" = xdebug ] ; then
-			return 0
-		fi
 		if [ "$HA_LOGTAG" ]; then
 			echo "$HA_LOGTAG: $msg"
 		else

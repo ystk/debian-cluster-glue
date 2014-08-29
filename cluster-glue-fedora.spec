@@ -15,8 +15,8 @@
 
 Name:		cluster-glue
 Summary:	Reusable cluster components
-Version:	1.0.9
-Release:	1%{?dist}
+Version:	1.0.12
+Release:	0.rc1%{?dist}
 License:	GPLv2+ and LGPLv2+
 Url:		http://www.linux-ha.org/wiki/Cluster_Glue
 Group:		System Environment/Base
@@ -37,10 +37,11 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 # Build dependencies
 BuildRequires: automake autoconf libtool pkgconfig which
-BuildRequires: bzip2-devel glib2-devel python-devel libxml2-devel
+BuildRequires: bzip2-devel glib2-devel python-devel libxml2-devel libaio-devel
 BuildRequires: OpenIPMI-devel openssl-devel
 BuildRequires: libxslt docbook-dtds docbook-style-xsl
 BuildRequires: help2man
+BuildRequires: asciidoc
 
 %if 0%{?fedora} 
 BuildRequires:    libcurl-devel libnet-devel
@@ -53,10 +54,10 @@ BuildRequires:    net-snmp-devel >= 5.4
 BuildRequires:    gcc-c++
 %endif
 
-%if 0%{?fedora} < 12
-BuildRequires: e2fsprogs-devel
-%else
+%if 0%{?fedora} > 11 || 0%{?centos} > 5 || 0%{?rhel} > 5
 BuildRequires: libuuid-devel
+%else
+BuildRequires: e2fsprogs-devel
 %endif
 
 %prep
@@ -124,15 +125,16 @@ standards, and an interface to common STONITH devices.
 %{_sbindir}/cibsecret
 %{_sbindir}/meatclient
 %{_sbindir}/stonith
-%{_sbindir}/sbd
 %dir %{_libdir}/heartbeat
 %dir %{_libdir}/heartbeat/plugins
 %dir %{_libdir}/heartbeat/plugins/RAExec
 %dir %{_libdir}/heartbeat/plugins/InterfaceMgr
+%dir %{_libdir}/heartbeat/plugins/compress
 %{_libdir}/heartbeat/lrmd
 %{_libdir}/heartbeat/ha_logd
 %{_libdir}/heartbeat/plugins/RAExec/*.so
 %{_libdir}/heartbeat/plugins/InterfaceMgr/*.so
+%{_libdir}/heartbeat/plugins/compress/*.so
 %dir %{_libdir}/stonith
 %dir %{_libdir}/stonith/plugins
 %dir %{_libdir}/stonith/plugins/stonith2
