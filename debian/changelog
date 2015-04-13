@@ -1,3 +1,18 @@
+cluster-glue (1.0.12~rc1+hg2777-1.2) unstable; urgency=medium
+
+  * Non-maintainer upload.
+
+  [ Johannes Schauer ]
+  * Check for libtoolize rather than libtool. Closes: #761737
+
+  [ Andreas Metzler ]
+  * Drop unused build-dependency on libgnutls-dev. Closes: #764093
+
+  [ Matthias Klose ]
+  * Fix typo in package description. Closes: #712998.
+
+ -- Matthias Klose <doko@debian.org>  Mon, 13 Oct 2014 20:55:43 +0200
+
 cluster-glue (1.0.12~rc1+hg2777-1) unstable; urgency=medium
 
   * New upstream release, upload to unstable
