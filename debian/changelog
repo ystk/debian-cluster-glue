@@ -1,0 +1,390 @@
+cluster-glue (1.0.12-5) unstable; urgency=medium
+
+  * Drop --link-doc=cluster-glue, it's a nice idea but causes too much
+    trouble.  Closes: #821129, #821894.
+
+ -- Christoph Berg <myon@debian.org>  Thu, 21 Apr 2016 19:24:54 +0200
+
+cluster-glue (1.0.12-4) unstable; urgency=medium
+
+  * libplumb2.symbols: Update hurd-specific symbols to match kfreebsd as well.
+  * Remove obsolete Conflicts/Replaces against heartbeat. Closes: #820221.
+  * Fix cl_times on x32: On x32, sizeof(long) is 4, and sizeof(clock_t) is 8.
+    cl_times as logic to reject that case. We fix this by setting the return
+    type of the function to long long instead on x32.
+
+ -- Christoph Berg <myon@debian.org>  Thu, 07 Apr 2016 23:30:58 +0200
+
+cluster-glue (1.0.12-3) unstable; urgency=medium
+
+  * Fix B-D and dh_install for hurd and kfreebsd.
+  * Unreproducibility issues caused by not using dh have been verified as
+    fixed, closes: #800776.
+
+ -- Christoph Berg <myon@debian.org>  Sat, 26 Mar 2016 12:04:15 +0100
+
+cluster-glue (1.0.12-2) unstable; urgency=medium
+
+  * Remove old transitional packages libcluster-glue and libcluster-glue-dev.
+  * Remove iproute from B-D. Closes: #753696.
+  * Add bzip2 to cluster-glue dependencies. Closes: #613562.
+  * Add ipmitool to cluster-glue recommendations. Closes: #630718.
+  * Create hacluster user in cluster-glue.postinst and chown the
+    /var/lib/heartbeat/cores/ directories to hacluster and nobody.
+    Closes: #759473.
+  * Add patch by Robert Millan and Gabriele Giacone to support kfreebsd and
+    hurd. Thanks! Closes: #650820.
+  * FTBFS due to openipmi problems resolved now. Closes: #818523.
+  * Update list of Uploaders.
+
+ -- Christoph Berg <myon@debian.org>  Fri, 25 Mar 2016 19:35:29 +0100
+
+cluster-glue (1.0.12-1) unstable; urgency=medium
+
+  [ Richard B Winters ]
+  * New upstream release
+  * debian/compat: Bumped to level 9
+  * debian/control: Removed hardening wrapper from Build-Depends in order to
+    remove obsolete depends as hardening implementation updated
+  * debian/control: Required Build-Depends version for debhelper bumped to 9
+  * debian/control: Added and Updated Vcs-Git and Vcs-Browser, respectively, 
+    to point to the newly created git packaging repositories on Alioth; 
+    Mercurial still available at previous location; Vcs-HG field removed
+  * debian/control: Updated fields for folding where applicable
+  * debian/control: Bumped standards to 3.9.6
+    - debian/copyright updated to DEP-5 copyright format
+  * debian/control: Changed Conflicts to Breaks, as recommended by lintian
+    information warnings, where applicable
+  * debian/control: Added a debug package to the package offering
+  * debian/control: Added myself to list of uploaders
+  * debian/copyright: Updated copyright for debian/* to also include original 
+    packager, Christoph Berg, and myself.
+  * debian/copyright: Updated formatting for BSD license type so it can be 
+    parsed correctly, and added BSD-3-clause License paragraph populated with
+    respective clauses and license terms as presented by upstream.
+  * debian/copyright: License paragraph for component which was not under any
+    license was added with the text previously explaining such as its body of
+    text;
+  * debian/patches: Removed all RC patches, save libtoolize_check, as they are
+    no longer necessary
+  * debian/patches: libtoolize_check run through gbp pq, and file renamed
+    accordingly after export; 0001-libtoolize_check.patch
+  * debian/patches: Added patch to remove .hgtags from source prior to build
+  * debian/patches: Added patch to remove .hgignore from source prior to build
+  * debian/patches: Added patch to remove .hgsigs from source prior to build
+  * debian/patches: Added patch to correct spelling in lrm/lrmd/lrmd.c; ouput, 
+    output
+  * debian/patches: Series updated to specify all applicable patches
+  * debian/rules: Updated hardening to latest recommended implementation; see
+    https://wiki.debian.org/Hardening
+  * debian/rules: Updated to use dh7+ syntax, and streamlined
+  * debian/cluster-glue.install: Added reference to logd.service in 
+    lib/systemd/system/logd/
+  * debian/cluster-glue.install: Removed reference to component which is no 
+    longer provided by upstream; usr/share/cluster-glue/combine-logs.pl
+  * debian/cluster-glue.links: Added to provide a manual for cibsecret; 
+    Resolves lack of manual for each binary provided by package as  
+    flagged by lintian informational warnings, by targeting the lrmadmin 
+    manual which uses said binary
+  * debian/<pkg>.lintian-overrides: Added overrides for the following lintian
+    informational warnings
+    - cluster-glue source; intra-source-package-circular-dependency
+    - libcluster-glue; package-relation-with-self
+  * debian/<pkg>.symbols: Added accurate symbols from snapshot.debian.org 
+    v1.0.3+
+  * debian/watch: Added in order to watch for upstream releases
+
+  [ Christoph Berg ]
+  * debian/control: Add dh-autoreconf and systemd B-D.
+
+ -- Christoph Berg <myon@debian.org>  Tue, 22 Mar 2016 13:26:13 +0100
+
+cluster-glue (1.0.12~rc1+hg2777-1.2) unstable; urgency=medium
+
+  * Non-maintainer upload.
+
+  [ Johannes Schauer ]
+  * Check for libtoolize rather than libtool. Closes: #761737
+
+  [ Andreas Metzler ]
+  * Drop unused build-dependency on libgnutls-dev. Closes: #764093
+
+  [ Matthias Klose ]
+  * Fix typo in package description. Closes: #712998.
+
+ -- Matthias Klose <doko@debian.org>  Mon, 13 Oct 2014 20:55:43 +0200
+
+cluster-glue (1.0.12~rc1+hg2777-1) unstable; urgency=medium
+
+  * New upstream release, upload to unstable
+  * debian/cluster-glue.logd.init: Add reference to lsb functions file
+  * debian/control: Bump Standards-Version
+
+ -- Martin Loschwitz <madkiss@debian.org>  Fri, 21 Feb 2014 11:48:44 +0000
+
+cluster-glue (1.0.11+hg2754-1.1) experimental; urgency=low
+
+  * Non-maintainer upload.
+  * Convert to dh_python2 (Closes: #616777).
+
+ -- Luca Falavigna <dktrkranz@debian.org>  Tue, 09 Jul 2013 22:29:56 +0200
+
+cluster-glue (1.0.11+hg2754-1) experimental; urgency=low
+
+  * New upstream version
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 20 Mar 2013 21:55:32 +0000
+
+cluster-glue (1.0.10+hg2722-1) unstable; urgency=low
+
+  * New upstream version
+  * debian/control: added libaio-dev to Build-Depends
+  * debian/rules: enable hardening
+ 
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 09 Oct 2012 10:31:49 +0000
+
+cluster-glue (1.0.9+hg2665-1) unstable; urgency=low
+
+  * Update to latest upstream mercurial tip; includes a fix for the IPMI
+    stonith plugin
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 29 Feb 2012 15:33:34 +0000
+
+cluster-glue (1.0.8-3) unstable; urgency=high
+
+  * debian/patches/series: Disable raexecupstart.patch as the bug causing
+    this was in glib and is fixed in Unstable by now. For further details,
+    please refer to the Ubuntu bug tracking system at
+    https://bugs.launchpad.net/ubuntu/+source/cluster-glue/+bug/821732
+    (urgency is set to high because this fixes a memory leak that might
+    otherwise crash lrmd and crmd along with it)
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 15 Nov 2011 17:00:18 +0000
+
+cluster-glue (1.0.8-2) unstable; urgency=low
+
+  * Added help2man to the Build-Depends: field in debian/control 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Thu, 20 Oct 2011 17:16:24 +0000
+
+cluster-glue (1.0.8-1) unstable; urgency=low
+
+  * New upstream version 1.0.8.
+  * Added numerous new files to debian/cluster-glue.install
+
+ -- Martin Loschwitz <madkiss@debian.org>  Thu, 20 Oct 2011 09:05:29 +0000
+
+cluster-glue (1.0.7+hg2618-3) UNRELEASED; urgency=low
+
+  * Integrated numerous changes from the Ubuntu version of this package,
+  worth being mentioned is the upstart patch. 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Thu, 20 Oct 2011 08:54:26 +0000
+
+cluster-glue (1.0.7+hg2618-2) unstable; urgency=low
+
+  * debian/control: Add proper Replaces: and Conflicts: for libstonithd0-dev 
+    for libstonithd1-dev to avoid conflicting files (Closes: #639272)
+  * debian/rules: Install the logd.cf configuration file for logd as it was
+    missing up to this point (thanks to Andreas Kurz for pointing this out)
+
+ -- Martin Loschwitz <madkiss@debian.org>  Fri, 26 Aug 2011 06:09:24 +0000
+
+cluster-glue (1.0.7+hg2618-1) unstable; urgency=low
+
+  * New upstream Mercurial Checkout
+  * Acknowledging previous NMUs; thank you very much!
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 24 Aug 2011 09:00:46 +0000
+
+cluster-glue (1.0.7-3.3) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Also empty dependency_libs for plugins.
+
+ -- Luk Claes <luk@debian.org>  Sun, 03 Jul 2011 09:39:39 +0200
+
+cluster-glue (1.0.7-3.2) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Remove references to other libraries from dependency_libs field
+    closes: #619551.
+
+ -- Luk Claes <luk@debian.org>  Sun, 29 May 2011 19:06:36 +0200
+
+cluster-glue (1.0.7-3.1) unstable; urgency=high
+
+  * Non-maintainer upload.
+  * High urgency for RC bug fix.
+  * Add missing dependency on libltdl-dev to libpils2-dev, closes: #621078.
+
+ -- Julien Cristau <jcristau@debian.org>  Sun, 08 May 2011 17:29:13 +0200
+
+cluster-glue (1.0.7-3) unstable; urgency=low
+
+  [ Andres Rodriguez ]
+  * Remove ${shlibs:depends} from library -dev packages.
+
+ -- Simon Horman <horms@debian.org>  Mon, 20 Dec 2010 09:29:12 +0900
+
+cluster-glue (1.0.7-2) unstable; urgency=low
+
+  * New upstream for unstable
+
+ -- Simon Horman <horms@debian.org>  Thu, 16 Dec 2010 23:11:46 +0900
+
+cluster-glue (1.0.7-1) experimental; urgency=low
+
+  * New Upstream
+
+ -- Simon Horman <horms@debian.org>  Thu, 16 Dec 2010 21:34:47 +0900
+
+cluster-glue (1.0.6+hg2461-1) experimental; urgency=low
+
+  * Upload to experimental
+  * New upstream checkout (2010-10-19) 
+  * Major change: Library split into multiple packages to comply with
+    Debian policy better (as per c. 8.1)
+  * Removed the "spelling-fixes"-patch as it was applied by upstream
+  * Bumped Standards-Version to 3.9.1
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 19 Oct 2010 11:50:00 +0200
+
+cluster-glue (1.0.6-1) unstable; urgency=low
+
+  * New upstream (closes: #588938)
+    - Cleans CFLAGS in a dash-friendly way (closes: #582875)
+
+ -- Simon Horman <horms@debian.org>  Wed, 14 Jul 2010 09:53:50 +0900
+
+cluster-glue (1.0.5-2) unstable; urgency=low
+
+  * Add build dependency on docbook-xml.
+
+ -- Frederik Schüler <fs@debian.org>  Mon, 03 May 2010 20:05:32 +0200
+
+cluster-glue (1.0.5-1) unstable; urgency=low
+
+  * New upstream version 1.0.5 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Fri, 16 Apr 2010 06:25:09 +0000
+
+cluster-glue (1.0.3+hg2366-4) unstable; urgency=low
+
+  * Disable fatal warnings to make cluster-glue compile on numerous 
+  architectures other than x86(_64) 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 06 Apr 2010 13:08:01 +0000
+
+cluster-glue (1.0.3+hg2366-3) unstable; urgency=low
+
+  * Added files to cluster-glue.install that were added upstream 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 30 Mar 2010 11:03:34 +0000
+
+cluster-glue (1.0.3+hg2366-2) unstable; urgency=low
+
+  * Include patch by Simon Hormann to Replaces/Conflicts 
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 30 Mar 2010 07:04:53 +0000
+
+cluster-glue (1.0.3+hg2366-1) unstable; urgency=low
+
+  * New upstream checkout.
+  * Updated debian/copyright to reflect the current situation
+  * Remove useless STYLESHEET_PREFIX patch from debian/patches
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 30 Mar 2010 06:28:50 +0000
+
+cluster-glue (1.0.3+hg2365-1) unstable; urgency=low
+
+  * New upstream checkout.
+  * Move lintian overides from cluster-glue to libcluster-glue.
+
+ -- Frederik Schüler <fs@debian.org>  Fri, 12 Mar 2010 12:36:56 +0100
+
+cluster-glue (1.0.3+hg2337-2) unstable; urgency=low
+
+  * Add libcluster-glue{-dev}.install files, and actually install libraries.
+
+ -- Frederik Schüler <fs@debian.org>  Tue, 09 Mar 2010 13:12:04 +0100
+
+cluster-glue (1.0.3+hg2337-1) unstable; urgency=low
+
+  [ Martin G. Loschwitz ] 
+  * Replaced the copyright-file with the one updated by Ante Karamatic
+  * Split cluster-glue into libcluster-glue{-dev} and cluster-glue{-dev}
+ 
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 02 Mar 2010 13:02:00 +0100
+
+cluster-glue (1.0.3-2) UNRELEASED; urgency=low
+
+  [ Simon Horman ]
+  * Do not do a binary-indep build as there is nothing to do.
+  * Build-Depend on libsensors4-dev | libsensors-dev.
+
+  [ Frederik Schüler ]
+  * Bump standards to version 3.8.4, no changes needed.
+  * Switch to source version 3.0 "quilt".
+  * Switch to debian compatibility level 7.
+  * Drop dpatch.
+  * Add misc-depends to cluster-glue-dev.
+  * Add linian overrides.
+  * Remove rpath from ipmilan.so.
+
+ -- Frederik Schüler <fs@debian.org>  Fri, 26 Feb 2010 19:39:13 +0100
+
+cluster-glue (1.0.3-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 03 Feb 2010 08:05:00 +0100
+
+cluster-glue (1.0.2~rc2b+hg20100127-0test1) unstable; urgency=low
+
+  * New build of the Debian version of this package, incorporating many
+    changes done by Ante Karamatic (thank you very much!)
+  * New upstream checkout
+
+ -- Martin Loschwitz <madkiss@debian.org>  Wed, 26 Jan 2010 12:58:00 +0200
+
+cluster-glue (1.0.2~rc2a-0ubuntu0ppa2) lucid; urgency=low
+
+  * Addes docbook-xsl to build-depends
+  * debian/patches/01_stylesheet_path.dpatch:
+    - use local docbook
+
+ -- Ante Karamatic <ivoks@ubuntu.com>  Mon, 04 Jan 2010 15:18:40 +0000
+
+cluster-glue (1.0.2~rc2a-0ubuntu0ppa1) lucid; urgency=low
+
+  * New upstream checkout
+  * Added xsltproc to build-depends; needed for rebuilding of man pages
+  * Modified paths in cluster-glue.install and cluster-glue-dev.install
+
+ -- Ante Karamatic <ivoks@ubuntu.com>  Sun, 03 Jan 2010 09:38:25 +0000
+
+cluster-glue (1.0+hg20091102-1~bpo50+1) lenny-backports; urgency=low
+
+  * Rebuild for lenny-backports.
+
+ -- Martin Loschwitz <madkiss@debian.org>  Mon, 02 Nov 2009 15:02:29 +0000
+
+cluster-glue (1.0+hg20091102-1) unstable; urgency=low
+
+  * New upstream checkout
+
+ -- Martin Loschwitz <madkiss@debian.org>  Mon, 02 Nov 2009 00:00:00 +0100
+
+cluster-glue (1.0+hg20091012-1) unstable; urgency=low
+
+  * New upstream checkout
+  * Adopting numerous changes from HG
+
+ -- Martin Loschwitz <madkiss@debian.org>  Mon, 12 Oct 2009 16:14:00 +0200
+
+cluster-glue (1.0+hg20090915-1) unstable; urgency=low
+
+  * Initial release of packages for the cluster-glue-framework
+
+ -- Martin Loschwitz <madkiss@debian.org>  Tue, 15 Sep 2009 09:56:16 +0000

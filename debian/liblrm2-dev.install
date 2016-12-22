@@ -1,0 +1,4 @@
+usr/lib/liblrm.so
+usr/lib/liblrm.a
+usr/lib/liblrm.la
+usr/include/heartbeat/lrm/*.h

@@ -1,0 +1,4 @@
+usr/lib/libplumb.so
+usr/lib/libplumb.a
+usr/lib/libplumb.la
+usr/include/clplumbing/*.h

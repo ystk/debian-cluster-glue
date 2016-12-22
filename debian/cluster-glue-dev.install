@@ -1,0 +1,9 @@
+usr/lib/heartbeat/plugins/InterfaceMgr/*.la
+usr/lib/heartbeat/plugins/InterfaceMgr/*.a
+usr/lib/heartbeat/plugins/RAExec/*.la
+usr/lib/heartbeat/plugins/RAExec/*.a
+usr/lib/heartbeat/plugins/test/*.la
+usr/lib/heartbeat/plugins/test/*.a
+usr/lib/stonith/plugins/stonith2/*.la
+usr/lib/stonith/plugins/stonith2/*.a
+usr/include/heartbeat/*.h

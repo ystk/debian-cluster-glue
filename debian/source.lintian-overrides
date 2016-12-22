@@ -1,0 +1,4 @@
+# The circular intra-source dependencies are due to cluster-glue depending on
+# the lib* packages, but the lib* packages need to depend on cluster-glue as
+# well because their /usr/share/doc directory is a symlink to cluster-glue.
+cluster-glue source: intra-source-package-circular-dependency

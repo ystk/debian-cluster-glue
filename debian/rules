@@ -1,0 +1,56 @@
+#!/usr/bin/make -f
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# We don't need - or can't, rather, enforce (cf. Policy 10.2)
+# because libtool does some chrpath's and re-linking through out 
+# the build process, and these options fail the build before 
+# lib tool gets it's chance to do anything.
+# export DEB_LDFLAGS_MAINT_APPEND=-Wl,-z,defs
+
+# main packaging script based on dh7 syntax
+%:
+	dh $@ --with autoreconf,python2,systemd
+
+override_dh_autoreconf:
+	dh_autoreconf ./autogen.sh
+
+override_dh_auto_configure:
+	./configure  --sysconfdir=/etc --localstatedir=/var \
+		--enable-upstart --enable-dependency-tracking --disable-fatal-warnings
+
+override_dh_auto_install:
+	dh_auto_install
+# clear .la files, dependency_libs fields
+	for file in `find $(CURDIR)/debian/tmp -name '*.la'`; do \
+		sed -i "/dependency_libs/ s/'.*'/''/" $$file ; \
+	done
+
+DEB_HOST_ARCH_OS=$(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+ifeq (linux,$(DEB_HOST_ARCH_OS))
+FAIL_MISSING=--fail-missing
+endif
+override_dh_install:
+# we should probably use dh_install -X here, but it doesn't work
+ifeq (hurd,$(DEB_HOST_ARCH_OS))
+	sed -i -e'/bladehpi/d' -e '/ipmilan/d' -e '/systemd/d' debian/*.install
+endif
+ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
+	sed -i -e '/systemd/d' debian/*.install
+endif
+	dh_install $(FAIL_MISSING)
+
+override_dh_installinit:
+	dh_installinit --name=logd -pcluster-glue -u 'defaults 20 32'
+
+override_dh_installchangelogs:
+	dh_installchangelogs ChangeLog
+
+override_dh_python2:
+	dh_python2
+	dh_python2 /usr/lib/stonith/plugins/stonith2
+
+override_dh_strip:
+	dh_strip --dbg-package=cluster-glue-dbg
+

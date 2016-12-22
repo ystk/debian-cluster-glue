@@ -1,0 +1,8 @@
+0001-libtoolize_check.patch
+0002-Fix-spelling-of-output-and-improve-grammar.patch
+0003-Remove-.hgtags-from-source.patch
+0004-Remove-.hgignore-from-source.patch
+0005-Remove-.hgsigs-from-source.patch
+kfbsd.diff
+hurd.diff
+x32-cl_times
