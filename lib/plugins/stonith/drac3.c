@@ -39,7 +39,7 @@
 
 static StonithPlugin *	drac3_new(const char *);
 static void	drac3_destroy(StonithPlugin *);
-static const char ** drac3_get_confignames(StonithPlugin *);
+static const char * const * drac3_get_confignames(StonithPlugin *);
 static int	drac3_set_config(StonithPlugin *, StonithNVpair *);
 static const char * drac3_getinfo(StonithPlugin * s, int InfoType);
 static int	drac3_status(StonithPlugin * );
@@ -118,7 +118,7 @@ static const char *NOTpluginID = "Dell DRACIII device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_HOST_PARM \
-	XML_PARAMETER_BEGIN(ST_HOST, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_HOST, "string", "1", "1") \
 	  XML_HOST_SHORTDESC \
 	  XML_HOST_LONGDESC \
 	XML_PARAMETER_END
@@ -191,7 +191,7 @@ drac3_destroy(StonithPlugin * s)
 }
 
 /* ------------------------------------------------------------------ */
-static const char **
+static const char * const *
 drac3_get_confignames(StonithPlugin * s)
 {
 	static const char * ret[] = {ST_HOST, ST_LOGIN, ST_PASSWD, NULL};
@@ -352,7 +352,7 @@ drac3_hostlist(StonithPlugin * s)
 	if (hl == NULL) {
 		LOG(PIL_CRIT, "%s: out of memory", __FUNCTION__);
 	} else {
-		g_strdown(hl[0]);
+		strdown(hl[0]);
 	}
 
 	return(hl);

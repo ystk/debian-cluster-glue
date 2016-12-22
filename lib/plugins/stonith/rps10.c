@@ -43,7 +43,7 @@
 static StonithPlugin *	rps10_new(const char *);
 static void		rps10_destroy(StonithPlugin *);
 static int		rps10_set_config(StonithPlugin *, StonithNVpair *);
-static const char**	rps10_get_confignames(StonithPlugin *);
+static const char * const *	rps10_get_confignames(StonithPlugin *);
 static const char *	rps10_getinfo(StonithPlugin * s, int InfoType);
 static int		rps10_status(StonithPlugin * );
 static int		rps10_reset_req(StonithPlugin * s, int request, const char * host);
@@ -196,7 +196,7 @@ static const char * NOTwtiid = "OBJECT DESTROYED: (WTI RPS-10)";
 	XML_PARM_LONGDESC_END
 
 #define XML_RPS10_PARM \
-	XML_PARAMETER_BEGIN(ST_RPS10, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_RPS10, "string", "1", "1") \
 	  XML_RPS10_SHORTDESC \
 	  XML_RPS10_LONGDESC \
 	XML_PARAMETER_END
@@ -640,7 +640,7 @@ RPS_parse_config_info(struct pluginDevice* ctx, const char * info)
 		}
 		
 		ctx->controllers[ctx->unit_count].node = STRDUP(node);
-		g_strdown(ctx->controllers[ctx->unit_count].node);
+		strdown(ctx->controllers[ctx->unit_count].node);
 		ctx->controllers[ctx->unit_count].outlet_id = outlet_id;
 		ctx->unit_count++;
 
@@ -948,7 +948,7 @@ rps10_set_config(StonithPlugin* s, StonithNVpair* list)
  *  Return the Stonith plugin configuration parameter 
  *
  */
-static const char**
+static const char * const *
 rps10_get_confignames(StonithPlugin* p)
 {
 	static const char *	Rps10Params[] = {ST_RPS10 ,NULL };

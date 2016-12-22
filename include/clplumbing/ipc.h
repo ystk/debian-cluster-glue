@@ -40,7 +40,6 @@
 
 /* constants */
 #define DEFAULT_MAX_QLEN 64
-#define MAX_MESSAGE_SIZE 4096
 #define MAX_MSGPAD 128
 /* channel and connection status */
 #define IPC_CONNECT		1	/* Connected: can read, write */
@@ -702,7 +701,7 @@ extern IPC_Auth * ipc_set_auth(uid_t * a_uid, gid_t * a_gid
 extern void ipc_destroy_auth(IPC_Auth * auth);
 
 extern void ipc_set_pollfunc(int (*)(struct pollfd*, unsigned int, int));
-
+extern void ipc_bufpool_dump_stats(void);
 
 #ifdef IPC_TIME_DEBUG
 

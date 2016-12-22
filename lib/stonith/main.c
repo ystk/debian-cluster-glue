@@ -28,6 +28,7 @@
 #include <syslog.h>
 #include <stonith/stonith.h>
 #include <pils/plugin.h>
+#include <clplumbing/cl_log.h>
 #include <glib.h>
 #include <libxml/entities.h>
 
@@ -38,6 +39,10 @@ extern char *	optarg;
 extern int	optind, opterr, optopt;
 
 static int	debug = 0;
+
+#define LOG_TERMINAL 0
+#define LOG_CLLOG 1
+static int	log_destination = LOG_TERMINAL;
 
 static const char META_TEMPLATE[] =
 "<?xml version=\"1.0\"?>\n"
@@ -50,10 +55,10 @@ static const char META_TEMPLATE[] =
 "<shortdesc lang=\"en\">%s</shortdesc>\n"
 "%s\n"
 "<actions>\n"
-"<action name=\"start\"   timeout=\"60\" />\n"
+"<action name=\"start\"   timeout=\"20\" />\n"
 "<action name=\"stop\"    timeout=\"15\" />\n"
-"<action name=\"status\"  timeout=\"60\" />\n"
-"<action name=\"monitor\" timeout=\"60\" interval=\"3600\" />\n"
+"<action name=\"status\"  timeout=\"20\" />\n"
+"<action name=\"monitor\" timeout=\"20\" interval=\"3600\" />\n"
 "<action name=\"meta-data\"  timeout=\"15\" />\n"
 "</actions>\n"
 "<special tag=\"heartbeat\">\n"
@@ -61,16 +66,33 @@ static const char META_TEMPLATE[] =
 "</special>\n"
 "</resource-agent>\n";
 
-void version();
+void version(void);
 void usage(const char * cmd, int exit_status, const char * devtype);
 void confhelp(const char * cmd, FILE* stream, const char * devtype);
 void print_stonith_meta(Stonith * stonith_obj, const char *rsc_type);
+void print_types(void);
+void print_confignames(Stonith *s);
+
+void log_buf(int severity, char *buf);
+void log_msg(int severity, const char * fmt, ...)G_GNUC_PRINTF(2,3);
+void trans_log(int priority, const char * fmt, ...)G_GNUC_PRINTF(2,3);
+
+static int pil_loglevel_to_syslog_severity[] = {
+	/* Indices: <none>=0, PIL_FATAL=1, PIL_CRIT=2, PIL_WARN=3,
+	   PIL_INFO=4, PIL_DEBUG=5 
+	*/
+	LOG_EMERG, LOG_ALERT, LOG_CRIT, LOG_WARNING, LOG_INFO, LOG_DEBUG
+	};
 
 /*
  * Note that we don't use the cl_log logging code because the STONITH
  * command is intended to be shipped without the clplumbing libraries.
  *
  *	:-(
+ *
+ * The stonith command has so far always been shipped along with
+ * the clplumbing library, so we'll use cl_log
+ * If that ever changes, we'll use something else
  */
 
 void
@@ -169,7 +191,7 @@ confhelp(const char * cmd, FILE* stream, const char * devtype)
 	for(this=typelist; *this && !devfound; ++this) {
 		const char *    SwitchType = *this;
 		const char *	cres;
-		const char **	pnames;
+		const char * const *	pnames;
 
 
 		if ((s = stonith_new(SwitchType)) == NULL) {
@@ -254,7 +276,7 @@ print_stonith_meta(Stonith * stonith_obj, const char *rsc_type)
 	}
 	xml_meta_longdesc = (char *)xmlEncodeEntitiesReentrant(NULL, (const unsigned char *)meta_longdesc);
 
-	meta_shortdesc = stonith_get_info(stonith_obj, ST_DEVICENAME);
+	meta_shortdesc = stonith_get_info(stonith_obj, ST_DEVICEID);
 	if (meta_shortdesc == NULL) {
 	    fprintf(stderr, "stonithRA plugin: no short description");
 	    meta_shortdesc = no_parameter_info;
@@ -276,6 +298,78 @@ print_stonith_meta(Stonith * stonith_obj, const char *rsc_type)
 
 #define	MAXNVARG	50
 
+void
+print_types()
+{
+	char **	typelist;
+
+	typelist = stonith_types();
+	if (typelist == NULL) {
+		log_msg(LOG_ERR, "Could not list Stonith types.");
+	}else{
+		char **	this;
+
+		for(this=typelist; *this; ++this) {
+			printf("%s\n", *this);
+		}
+	}
+}
+
+void
+print_confignames(Stonith *s)
+{
+	const char * const *	names;
+	int		i;
+
+	names = stonith_get_confignames(s);
+
+	if (names != NULL) {
+		for (i=0; names[i]; ++i) {
+			printf("%s  ", names[i]);
+		}
+	}
+	printf("\n");
+}
+
+void
+log_buf(int severity, char *buf)
+{
+	if (severity == LOG_DEBUG && !debug)
+		return;
+	if (log_destination == LOG_TERMINAL) {
+		fprintf(stderr, "%s: %s\n", prio2str(severity),buf);
+	} else {
+		cl_log(severity, "%s", buf);
+	}
+}
+
+void
+log_msg(int severity, const char * fmt, ...)
+{
+	va_list         ap;
+	char            buf[MAXLINE];
+
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+	va_end(ap);
+	log_buf(severity, buf);
+}
+
+void
+trans_log(int priority, const char * fmt, ...)
+{
+	int				severity;
+	va_list         ap;
+	char            buf[MAXLINE];
+
+	severity = pil_loglevel_to_syslog_severity[ priority % sizeof
+		(pil_loglevel_to_syslog_severity) ];
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+	va_end(ap);
+	log_buf(severity, buf);
+}
+
 int
 main(int argc, char** argv)
 {
@@ -283,7 +377,6 @@ main(int argc, char** argv)
 	int		rc;
 	Stonith *	s;
 	const char *	SwitchType = NULL;
-	const char *	tmp;
 	const char *	optfile = NULL;
 	const char *	parameters = NULL;
 	int		reset_type = ST_GENERIC_RESET;
@@ -395,6 +488,17 @@ main(int argc, char** argv)
 		}
 	}
 
+	/* if we're invoked by stonithd, log through cl_log */
+	if (!isatty(fileno(stdin))) {
+		log_destination = LOG_CLLOG;
+		cl_log_set_entity("stonith");
+		cl_log_enable_stderr(debug?TRUE:FALSE);
+		cl_log_set_facility(HA_LOG_FACILITY);
+
+		/* Use logd if it's enabled by heartbeat */
+		cl_inherit_logging_environment(0);
+	}
+
 	if (help && !errors) {
 		usage(cmdname, 0, SwitchType);
 	}
@@ -417,21 +521,9 @@ main(int argc, char** argv)
 		if ((eqpos=strchr(argv[optind], EQUAL)) == NULL) {
 			break;
 		}
-		if (parameters)  {
+		if (parameters || optfile || params_from_env)  {
 			fprintf(stderr
-			,	"Cannot include both -p and name=value "
-			"style arguments\n");
-			usage(cmdname, 1, NULL);
-		}
-		if (optfile)  {
-			fprintf(stderr
-			,	"Cannot include both -F and name=value "
-			"style arguments\n");
-			usage(cmdname, 1, NULL);
-		}
-		if (params_from_env)  {
-			fprintf(stderr
-			,	"Cannot use both -E and name=value "
+			,	"Cannot mix name=value and -p, -F, or -E "
 			"style arguments\n");
 			usage(cmdname, 1, NULL);
 		}
@@ -460,41 +552,27 @@ main(int argc, char** argv)
 	}
 
 	if (listtypes) {
-		char **	typelist;
-
-		typelist = stonith_types();
-		if (typelist == NULL) {
-			syslog(LOG_ERR, "Could not list Stonith types.");
-		}else{
-			char **	this;
-
-			for(this=typelist; *this; ++this) {
-				printf("%s\n", *this);
-			}
-		}
+		print_types();
 		exit(0);
 	}
 
-#ifndef LOG_PERROR
-#	define LOG_PERROR	0
-#endif
-	openlog(cmdname, (LOG_CONS|(silent ? 0 : LOG_PERROR)), LOG_USER);
 	if (SwitchType == NULL) {
-		fprintf(stderr,	"Must specify device type (-t option)\n");
+		log_msg(LOG_ERR,"Must specify device type (-t option)");
 		usage(cmdname, 1, NULL);
 	}
 	s = stonith_new(SwitchType);
 	if (s == NULL) {
-		syslog(LOG_ERR, "Invalid device type: '%s'", SwitchType);
+		log_msg(LOG_ERR,"Invalid device type: '%s'", SwitchType);
 		exit(S_OOPS);
 	}
 	if (debug) {
 		stonith_set_debug(s, debug);
 	}
+	stonith_set_log(s, (PILLogFun)trans_log);
 
 	if (!listparanames && !metadata && optfile == NULL &&
 			parameters == NULL && !params_from_env && nvcount == 0) {
-		const char**	names;
+		const char * const *	names;
 		int		needs_parms = 1;
 
 		if (s != NULL && (names = stonith_get_confignames(s)) != NULL && names[0] == NULL) {
@@ -513,16 +591,7 @@ main(int argc, char** argv)
 	}
 
 	if (listparanames) {
-		const char**	names;
-		int		i;
-		names = stonith_get_confignames(s);
-
-		if (names != NULL) {
-			for (i=0; names[i]; ++i) {
-				printf("%s  ", names[i]);
-			}
-		}
-		printf("\n");
+		print_confignames(s);
 		stonith_delete(s); 
 		s=NULL;
 		exit(0);
@@ -539,11 +608,11 @@ main(int argc, char** argv)
 	if (optfile) {
 		/* Configure the Stonith object from a file */
 		if ((rc=stonith_set_config_file(s, optfile)) != S_OK) {
-			syslog(LOG_ERR
+			log_msg(LOG_ERR
 			,	"Invalid config file for %s device."
 			,	SwitchType);
 #if 0
-			syslog(LOG_INFO, "Config file syntax: %s"
+			log_msg(LOG_INFO, "Config file syntax: %s"
 			,	s->s_ops->getinfo(s, ST_CONF_FILE_SYNTAX));
 #endif
 			stonith_delete(s); s=NULL;
@@ -585,7 +654,7 @@ main(int argc, char** argv)
 		 *	Configure STONITH device using cmdline arguments...
 		 */
 		if ((rc = stonith_set_config(s, nvargs)) != S_OK) {
-			const char**	names;
+			const char * const *	names;
 			int		j;
 			fprintf(stderr
 			,	"Invalid config info for %s device\n"
@@ -609,19 +678,21 @@ main(int argc, char** argv)
 
 
 	for (j=0; j < count; ++j) {
-		rc = stonith_get_status(s);
+		rc = S_OK;
 
-		if ((tmp = stonith_get_info(s, ST_DEVICEID)) == NULL) {
-			SwitchType = tmp;
-		}
+		if (status) {
+			rc = stonith_get_status(s);
 
-		if (status && !silent) {
-			if (rc == S_OK) {
-				syslog(LOG_ERR, "%s device OK.", SwitchType);
-			}else{
-				/* Uh-Oh */
-				syslog(LOG_ERR, "%s device not accessible."
-				,	SwitchType);
+			if (!silent) {
+				if (rc == S_OK) {
+					log_msg((log_destination == LOG_TERMINAL) ?
+					LOG_INFO : LOG_DEBUG,
+					"%s device OK.", SwitchType);
+				}else{
+					/* Uh-Oh */
+					log_msg(LOG_ERR, "%s device not accessible."
+					,	SwitchType);
+				}
 			}
 		}
 
@@ -630,8 +701,9 @@ main(int argc, char** argv)
 
 			hostlist = stonith_get_hostlist(s);
 			if (hostlist == NULL) {
-				syslog(LOG_ERR, "Could not list hosts for %s."
+				log_msg(LOG_ERR, "Could not list hosts for %s."
 				,	SwitchType);
+				rc = -1;
 			}else{
 				char **	this;
 
@@ -645,7 +717,7 @@ main(int argc, char** argv)
 		if (optind < argc) {
 			char *nodename;
 			nodename = g_strdup(argv[optind]);
-			g_strdown(nodename);
+			strdown(nodename);
 			rc = stonith_req_reset(s, reset_type, nodename);
 			g_free(nodename);
 		}

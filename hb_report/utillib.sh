@@ -35,8 +35,18 @@ get_cluster_type() {
 # find out which membership tool is installed
 #
 echo_membership_tool() {
+	local f membership_tools
 	membership_tools="ccm_tool crm_node"
 	for f in $membership_tools; do
+		which $f 2>/dev/null && break
+	done
+}
+# find out if ptest or crm_simulate
+#
+echo_ptest_tool() {
+	local f ptest_progs
+	ptest_progs="crm_simulate ptest"
+	for f in $ptest_progs; do
 		which $f 2>/dev/null && break
 	done
 }
@@ -59,6 +69,10 @@ getnodes() {
 	elif [ "$CLUSTER_TYPE" = heartbeat ]; then
 		debug "reading nodes from ha.cf"
 		getcfvar node
+	# 5. if the cluster's stopped, try the CIB
+	elif [ -f $CIB_DIR/$CIB_F ]; then
+		debug "reading nodes from the archived $CIB_DIR/$CIB_F"
+		(CIB_file=$CIB_DIR/$CIB_F get_crm_nodes)
 	fi
 }
 
@@ -77,6 +91,7 @@ get_logd_logvars() {
 	HA_DEBUGFILE=`logd_getcfvar debugfile`
 }
 findlogdcf() {
+	local f
 	for f in \
 		`test -x $HA_BIN/ha_logd &&
 			which strings > /dev/null 2>&1 &&
@@ -96,6 +111,7 @@ findlogdcf() {
 # logging
 #
 syslogmsg() {
+	local severity logtag
 	severity=$1
 	shift 1
 	logtag=""
@@ -107,15 +123,20 @@ syslogmsg() {
 # find log destination
 #
 findmsg() {
+	local d syslogdirs favourites mark log
 	# this is tricky, we try a few directories
-	syslogdirs="/var/log /var/logs /var/syslog /var/adm /var/log/ha /var/log/cluster"
+	syslogdirs="/var/log /var/logs /var/syslog /var/adm
+	/var/log/ha /var/log/cluster /var/log/pacemaker
+	/var/log/heartbeat /var/log/crm /var/log/corosync /var/log/openais"
 	favourites="ha-*"
 	mark=$1
 	log=""
 	for d in $syslogdirs; do
 		[ -d $d ] || continue
 		log=`grep -l -e "$mark" $d/$favourites` && break
+		test "$log" && break
 		log=`grep -l -e "$mark" $d/*` && break
+		test "$log" && break
 	done 2>/dev/null
 	[ "$log" ] &&
 		ls -t $log | tr '\n' ' '
@@ -129,15 +150,20 @@ findmsg() {
 #
 str2time() {
 	perl -e "\$time='$*';" -e '
+	$unix_tm = 0;
 	eval "use Date::Parse";
 	if (!$@) {
-		print str2time($time);
+		$unix_tm = str2time($time);
 	} else {
 		eval "use Date::Manip";
 		if (!$@) {
-			print UnixDate(ParseDateString($time), "%s");
+			$unit_tm = UnixDate(ParseDateString($time), "%s");
 		}
 	}
+	if ($unix_tm != "") {
+		$unix_tm = int($unix_tm);
+	}
+	print $unix_tm;
 	'
 }
 getstamp_syslog() {
@@ -146,11 +172,27 @@ getstamp_syslog() {
 getstamp_legacy() {
 	awk '{print $2}' | sed 's/_/ /'
 }
+getstamp_rfc5424() {
+	awk '{print $1}'
+}
+get_ts() {
+	local l="$1" ts
+	ts=$(str2time `echo "$l" | $getstampproc`)
+	if [ -z "$ts" ]; then
+		local fmt
+		for fmt in rfc5424 syslog legacy; do
+			[ "getstamp_$fmt" = "$getstampproc" ] && continue
+			ts=$(str2time `echo "$l" | getstamp_$fmt`)
+			[ -n "$ts" ] && break
+		done
+	fi
+	echo $ts
+}
 linetime() {
-	l=`tail -n +$2 $1 | head -1 | $getstampproc`
-	str2time "$l"
+	get_ts "`tail -n +$2 $1 | head -1`"
 }
 find_getstampproc() {
+	local t l func trycnt
 	t=0 l="" func=""
 	trycnt=10
 	while [ $trycnt -gt 0 ] && read l; do
@@ -158,6 +200,12 @@ find_getstampproc() {
 		if [ "$t" ]; then
 			func="getstamp_syslog"
 			debug "the log file is in the syslog format"
+			break
+		fi
+		t=$(str2time `echo $l | getstamp_rfc5424`)
+		if [ "$t" ]; then
+			func="getstamp_rfc5424"
+			debug "the log file is in the rfc5424 format"
 			break
 		fi
 		t=$(str2time `echo $l | getstamp_legacy`)
@@ -170,11 +218,21 @@ find_getstampproc() {
 	done
 	echo $func
 }
+find_first_ts() {
+	local l ts
+	while read l; do
+		ts=`get_ts "$l"`
+		[ "$ts" ] && break
+		warning "cannot extract time: |$l|; will try the next one"
+	done
+	echo $ts
+}
 findln_by_time() {
 	local logf=$1
 	local tm=$2
 	local first=1
 	local last=`wc -l < $logf`
+	local tmid mid trycnt
 	while [ $first -le $last ]; do
 		mid=$((($last+$first)/2))
 		trycnt=10
@@ -224,17 +282,14 @@ isnumber() {
 	echo "$*" | grep -qs '^[0-9][0-9]*$'
 }
 touchfile() {
+	local t
 	t=`mktemp` &&
 	perl -e "\$file=\"$t\"; \$tm=$1;" -e 'utime $tm, $tm, $file;' &&
 	echo $t
 }
-find_files_clean() {
-	[ -z "$to_stamp" ] || rm -f "$to_stamp"
-	to_stamp=""
-	[ -z "$from_stamp" ] || rm -f "$from_stamp"
-	from_stamp=""
-}
 find_files() {
+	local dirs from_time to_time
+	local from_stamp to_stamp findexp
 	dirs=$1
 	from_time=$2
 	to_time=$3
@@ -242,24 +297,21 @@ find_files() {
 		warning "sorry, can't find files based on time if you don't supply time"
 		return
 	}
-	trap find_files_clean 0
 	if ! from_stamp=`touchfile $from_time`; then
-		warning "sorry, can't create temporary file for find_files"
+		warning "can't create temporary files"
 		return
 	fi
+	add_tmpfiles $from_stamp
 	findexp="-newer $from_stamp"
 	if isnumber "$to_time" && [ "$to_time" -gt 0 ]; then
 		if ! to_stamp=`touchfile $to_time`; then
-			warning "sorry, can't create temporary file for" \
-				"find_files"
-			find_files_clean
+			warning "can't create temporary files"
 			return
 		fi
+		add_tmpfiles $to_stamp
 		findexp="$findexp ! -newer $to_stamp"
 	fi
 	find $dirs -type f $findexp
-	find_files_clean
-	trap "" 0
 }
 
 #
@@ -288,6 +340,7 @@ chk_id() {
 	return 1
 }
 check_perms() {
+	local f p uid gid n_uid n_gid
 	essential_files |
 	while read type f p uid gid; do
 		[ -$type $f ] || {
@@ -308,7 +361,65 @@ check_perms() {
 #
 # coredumps
 #
+pkg_mgr_list() {
+# list of:
+# regex pkg_mgr
+# no spaces allowed in regex
+	cat<<EOF
+zypper.install zypper
+EOF
+}
+listpkg_zypper() {
+	local bins
+	local binary=$1 core=$2
+	gdb $binary $core </dev/null 2>&1 |
+	awk '
+	# this zypper version dumps all packages on a single line
+	/Missing separate debuginfos.*zypper.install/ {
+		sub(".*zypper.install ",""); print
+		exit}
+	n>0 && /^Try: zypper install/ {gsub("\"",""); print $NF}
+	n>0 {n=0}
+	/Missing separate debuginfo/ {n=1}
+	' | sort -u
+}
+fetchpkg_zypper() {
+	local pkg
+	debug "get debuginfo packages using zypper: $@"
+	zypper -qn ref > /dev/null
+	for pkg in $@; do
+		zypper -qn install -C $pkg >/dev/null
+	done
+}
+find_pkgmgr() {
+	local binary=$1 core=$2
+	local regex pkg_mgr
+	pkg_mgr_list |
+	while read regex pkg_mgr; do
+		if gdb $binary $core </dev/null 2>&1 |
+				grep "$regex" > /dev/null; then
+			echo $pkg_mgr
+			break
+		fi
+	done
+}
+get_debuginfo() {
+	local binary=$1 core=$2
+	local pkg_mgr pkgs
+	gdb $binary $core </dev/null 2>/dev/null |
+		egrep 'Missing.*debuginfo|no debugging symbols found' > /dev/null ||
+		return  # no missing debuginfo
+	pkg_mgr=`find_pkgmgr $binary $core`
+	if [ -z "$pkg_mgr" ]; then
+		warning "found core for $binary but there is no debuginfo and we don't know how to get it on this platform"
+		return
+	fi
+	pkgs=`listpkg_$pkg_mgr $binary $core`
+	[ -n "$pkgs" ] &&
+		fetchpkg_$pkg_mgr $pkgs
+}
 findbinary() {
+	local random_binary binary fullpath
 	random_binary=`which cat 2>/dev/null` # suppose we are lucky
 	binary=`gdb $random_binary $1 < /dev/null 2>/dev/null |
 		grep 'Core was generated' | awk '{print $5}' |
@@ -334,18 +445,21 @@ findbinary() {
 	fi
 	fullpath=`which $binary 2>/dev/null`
 	if [ x = x"$fullpath" ]; then
-		if [ -x $HA_BIN/$binary ]; then
-			echo $HA_BIN/$binary
-			debug "found the program at $HA_BIN/$binary for core $1"
-		else
-			warning "could not find the program path for core $1"
-		fi
+		for d in $HA_BIN $CRM_DAEMON_DIR; do
+			if [ -x $d/$binary ]; then
+				echo $d/$binary
+				debug "found the program at $d/$binary for core $1"
+			else
+				warning "could not find the program path for core $1"
+			fi
+		done
 	else
 		echo $fullpath
 		debug "found the program at $fullpath for core $1"
 	fi
 }
 getbt() {
+	local corefile absbinpath
 	which gdb > /dev/null 2>&1 || {
 		warning "please install gdb to get backtraces"
 		return
@@ -353,6 +467,7 @@ getbt() {
 	for corefile; do
 		absbinpath=`findbinary $corefile`
 		[ x = x"$absbinpath" ] && continue
+		get_debuginfo $absbinpath $corefile
 		echo "====================== start backtrace ======================"
 		ls -l $corefile
 		gdb -batch -n -quiet -ex ${BT_OPTS:-"thread apply all bt full"} -ex quit \
@@ -365,13 +480,13 @@ getbt() {
 # heartbeat configuration/status
 #
 iscrmrunning() {
+	local pid maxwait
 	ps -ef | grep -qs [c]rmd || return 1
-	#crmadmin -D >/dev/null 2>&1 &
-	crm_mon -1 >/dev/null 2>&1 &
+	crmadmin -D >/dev/null 2>&1 &
 	pid=$!
-	maxwait=10
+	maxwait=100
 	while kill -0 $pid 2>/dev/null && [ $maxwait -gt 0 ]; do
-		sleep 1
+		sleep 0.1
 		maxwait=$(($maxwait-1))
 	done
 	if kill -0 $pid 2>/dev/null; then
@@ -395,7 +510,7 @@ getconfig() {
 		dumpstate $1
 		touch $1/RUNNING
 	else
-		cp -p $HA_VARLIB/crm/$CIB_F $1/ 2>/dev/null
+		cp -p $CIB_DIR/$CIB_F $1/ 2>/dev/null
 		touch $1/STOPPED
 	fi
 	[ "$HOSTCACHE" ] &&
@@ -412,7 +527,7 @@ crmconfig() {
 get_crm_nodes() {
 	cibadmin -Ql -o nodes |
 	awk '
-	/type="normal"/ {
+	/<node / {
 		for( i=1; i<=NF; i++ )
 			if( $i~/^uname=/ ) {
 				sub("uname=.","",$i);
@@ -423,6 +538,14 @@ get_crm_nodes() {
 	}
 	'
 }
+get_live_nodes() {
+	if [ `id -u` = 0 ] && which fping >/dev/null 2>&1; then
+		fping -a $@ 2>/dev/null
+	else
+		local h
+		for h; do ping -c 2 -q $h >/dev/null 2>&1 && echo $h; done
+	fi
+}
 
 #
 # remove values of sensitive attributes
@@ -430,6 +553,7 @@ get_crm_nodes() {
 # this is not proper xml parsing, but it will work under the
 # circumstances
 is_sensitive_xml() {
+	local patt epatt
 	epatt=""
 	for patt in $SANITIZE; do
 		epatt="$epatt|$patt"
@@ -438,6 +562,7 @@ is_sensitive_xml() {
 	egrep -qs "name=\"$epatt\""
 }
 test_sensitive_one() {
+	local file compress decompress
 	file=$1
 	compress=""
 	echo $file | grep -qs 'gz$' && compress=gzip
@@ -451,6 +576,7 @@ test_sensitive_one() {
 	$decompress < $file | is_sensitive_xml
 }
 sanitize_xml_attrs() {
+	local patt
 	sed $(
 	for patt in $SANITIZE; do
 		echo "-e /name=\"$patt\"/s/value=\"[^\"]*\"/value=\"****\"/"
@@ -463,13 +589,8 @@ sanitize_hacf() {
 	{print}
 	'
 }
-sanitize_one_clean() {
-	[ -z "$tmp" ] || rm -f "$tmp"
-	tmp=""
-	[ -z "$ref" ] || rm -f "$ref"
-	ref=""
-}
 sanitize_one() {
+	local file compress decompress tmp ref
 	file=$1
 	compress=""
 	echo $file | grep -qs 'gz$' && compress=gzip
@@ -480,11 +601,10 @@ sanitize_one() {
 		compress=cat
 		decompress=cat
 	fi
-	trap sanitize_one_clean 0
 	tmp=`mktemp`
 	ref=`mktemp`
+	add_tmpfiles $tmp $ref
 	if [ -z "$tmp" -o -z "$ref" ]; then
-		sanitize_one_clean
 		fatal "cannot create temporary files"
 	fi
 	touch -r $file $ref  # save the mtime
@@ -494,12 +614,7 @@ sanitize_one() {
 		$decompress | sanitize_xml_attrs | $compress
 	fi < $file > $tmp
 	mv $tmp $file
-	# note: cleaning $tmp up is still needed even after it's renamed
-	# because its temp directory is still there.
-
 	touch -r $ref $file
-	sanitize_one_clean
-	trap "" 0
 }
 
 #
@@ -518,6 +633,7 @@ info() {
 debug() {
 	[ "$VERBOSITY" ] && [ $VERBOSITY -gt 0 ] &&
 	echo "`uname -n`: DEBUG: $*" >&2
+	return 0
 }
 pickfirst() {
 	for x; do
@@ -529,10 +645,28 @@ pickfirst() {
 	return 1
 }
 
+# tmp files business
+drop_tmpfiles() {
+	trap 'rm -rf `cat $__TMPFLIST`; rm $__TMPFLIST' EXIT
+}
+init_tmpfiles() {
+	if __TMPFLIST=`mktemp`; then
+		drop_tmpfiles
+	else
+		# this is really bad, let's just leave
+		fatal "eek, mktemp cannot create temporary files"
+	fi
+}
+add_tmpfiles() {
+	test -f "$__TMPFLIST" || return
+	echo $* >> $__TMPFLIST
+}
+
 #
 # get some system info
 #
 distro() {
+	local relf f
 	which lsb_release >/dev/null 2>&1 && {
 		lsb_release -d
 		debug "using lsb_release for distribution info"
@@ -552,44 +686,67 @@ distro() {
 	warning "no lsb_release, no /etc/*-release, no /etc/debian_version: no distro information"
 }
 
-pkg_ver() {
-	if which dpkg >/dev/null 2>&1 ; then
-			pkg_mgr="deb"
-	elif which rpm >/dev/null 2>&1 ; then
-			pkg_mgr="rpm"
-	elif which pkg_info >/dev/null 2>&1 ; then 
-			pkg_mgr="pkg_info"
-	elif which pkginfo >/dev/null 2>&1 ; then 
-			pkg_mgr="pkginfo"
-	else
-			echo "Unknown package manager!"
-			return
-	fi
-	debug "the package manager is $pkg_mgr"
-
-	# for Linux .deb based systems
-	for pkg ; do
-		case $pkg_mgr in
-		deb)
-			if dpkg-query -f '${Name} ${Version}' -W $pkg 2>/dev/null ; then
-				debsums -s $pkg 2>/dev/null
-			fi
-			;;
-		rpm)
-			if rpm -q --qf '%{name} %{version}-%{release} - %{distribution} %{arch}\n' $pkg ; then
-				rpm --verify $pkg
-			fi
-			;;
-		pkg_info)
-			pkg_info | grep $pkg
-			;;
-		pkginfo)
-			pkginfo | awk '{print $3}'  # format?
-			;;
-		esac
+pkg_ver_deb() {
+	dpkg-query -f '${Name} ${Version}' -W $* 2>/dev/null
+}
+pkg_ver_rpm() {
+	rpm -q --qf '%{name} %{version}-%{release} - %{distribution} %{arch}\n' $* 2>&1 |
+		grep -v 'not installed'
+}
+pkg_ver_pkg_info() {
+	for pkg; do
+		pkg_info | grep $pkg
 	done
+}
+pkg_ver_pkginfo() {
+	for pkg; do
+		pkginfo $pkg | awk '{print $3}'  # format?
+	done
+}
+verify_deb() {
+	debsums -s $* 2>/dev/null
+}
+verify_rpm() {
+	rpm --verify $* 2>&1 | grep -v 'not installed'
+}
+verify_pkg_info() {
+	:
+}
+verify_pkginfo() {
+	:
+}
+
+get_pkg_mgr() {
+	local pkg_mgr
+	if which dpkg >/dev/null 2>&1 ; then
+		pkg_mgr="deb"
+	elif which rpm >/dev/null 2>&1 ; then
+		pkg_mgr="rpm"
+	elif which pkg_info >/dev/null 2>&1 ; then 
+		pkg_mgr="pkg_info"
+	elif which pkginfo >/dev/null 2>&1 ; then 
+		pkg_mgr="pkginfo"
+	else
+		warning "Unknown package manager!"
+		return
+	fi
+	echo $pkg_mgr
+}
+
+pkg_versions() {
+	local pkg_mgr=`get_pkg_mgr`
+	[ -z "$pkg_mgr" ] &&
+		return
+	debug "the package manager is $pkg_mgr"
+	pkg_ver_$pkg_mgr $*
+}
+verify_packages() {
+	local pkg_mgr=`get_pkg_mgr`
+	[ -z "$pkg_mgr" ] &&
+		return
+	verify_$pkg_mgr $*
 }
 
 crm_info() {
-	$HA_BIN/crmd version 2>&1
+	$CRM_DAEMON_DIR/crmd version 2>&1
 }

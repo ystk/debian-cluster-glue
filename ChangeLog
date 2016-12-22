@@ -1,3 +1,141 @@
+* Fri Jul 18 2014 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.12
+- hb_report: add -Q option for quick runs
+- hb_report: dot is not illegal in file names (bnc#884079, deb#715391)
+- build: update spec files for systemd
+- hb_report: update interface to zypper
+- hb_report: support logs with varied timestamps
+- stonith: external/vcenter: add parameter for SSL hostname
+  verification (bnc#851990)
+- hb_report: fix ssh passwords again (bnc#867365)
+- hb_report: Don't use deprecated corosync-fplay (bnc#870913)
+- logd: Add systemd unit file for logd (bnc#863248)
+- hb_report: Add support for xz compression (bnc#854060)
+
+* Thu Sep 26 2013 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- release candidate 1.0.12-rc1
+- clplumbing: increase listen backlog to 128
+- hb_report: add -X option for extra ssh options
+- hb_report: add support for the rfc5424 syslog date format
+- stonith: external/libvirt: fix exit code in reset
+- stonith: external/vcenter: do not list vms in status
+  (bnc#825765)
+- stonith: fix memory leak in external.c
+- hb_report: enable ssh to prompt for passwords (bnc#808373)
+- hb_report: collect RA trace files
+- hb_report: look for nodes in the archived CIB if pacemaker is
+  not running
+- sbd plugin now lives at http://hg.linux-ha.org/sbd/
+- stonith: if debug's not set, do not send debug messages to the
+  logger (bnc#792124)
+- stonith: log status message at the debug level (bnc#792124)
+- stonith: don't always log debug level messages (bnc#792124)
+- stonith: external/vcenter: fix gethosts to produce list of
+  nodes not vms (bnc#792704)
+
+* Mon Oct 15 2012 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.11
+- lrmd: set max-children depending on the number of processors
+- lrmd: don't send parameters from ops back to crmd
+- stonith: external/libvirt: support for reboot reset method
+- hb_report: node's type got optional
+- hb_report: make use of bash trace features
+- hb_report: compatibility code for pacemaker v1.1.8
+- build: link libstonith with stonith2 agents
+
+* Mon Jul 16 2012 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.10
+- clplumbing: ipc: fix message size checks (bnc#752231)
+- clplumbing: load bz2 compression module by default
+- clplumbing: cl_msg: try compressing message before rejecting it
+  as too big
+- clplumbing: cl_msg: don't use traditional compression by default
+- clplumbing: cl_msg: increase compression threshold
+- clplumbing: fix memleak for Gmain_timeout
+- LRM: lrmd: add basic authentication (lf#2547)
+- LRM: lrmd: use the resource timeout as an override to the
+  default dbus timeout for upstart RA
+- LRM: lrmd: if set, get max-children from the LRMD_MAX_CHILDREN
+  environment var
+- stonith: add CRM stonith resource name to log messages (bnc#728579)
+- stonith: adjust timeouts in the meta-data template (bnc#733337)
+- stonith: external/vcenter: return list of configured hosts on
+  gethosts
+- stonith: external/libvirt: add more search strings for domain
+  start and stop
+- stonith: rhcs: pass the action via stdin too
+- stonith: rhcs: avoid false error if parameter isn't set
+- logd: remove runlevel 4 from the LSB info section in the logd
+  init script (bnc#744120)
+- logd: add try-restart action to the logd init script
+- sbd: Use async IO for disk reads to increase resilience against
+  hung IO (bnc#738295)
+- sbd: Handle IO errors during slot allocation properly (bnc#753559)
+- sbd: Debug mode added (bnc#753559, bnc#738295)
+- hb_report: improve performance
+- hb_report: get corosync blackbox records if available
+- hb_report: add node time information
+
+* Mon Nov 28 2011 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.9
+- stonith: external/ipmi: add missing double quote
+- stonith: external/ipmi: add the priv parameter (ipmitool -L)
+- LRM: lrmd: set op status to cancelled for running monitor operations
+- ha_log: increase MAXENTITY size to accommodate long stonith strings
+- hb_report: improve destination directory handling (bnc#727295)
+* Tue Oct 18 2011 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.8
+- cl_log: log spamming control
+- LRM: raexecocf: list resource agents properly (bnc#664409)
+- LRM: lrmd: allow storing parameters in local files (lf#2415)
+- LRM: lrmd: limit number of "stayed too long in operation list"
+  log messages (bnc#636576)
+- stonith: external/libvirt: new plugin for libvirt virtualization technologies
+- stonith: external/vcenter: new plugin
+- stonith: external/hetzner: new plugin
+- stonith: sbd: support for multiple devices
+- stonith: sbd: Fix timeout setting on archs where int != long (bnc#635690)
+- stonith: sbd: abort start if watchdog cannot be initialized (bnc#680109)
+- stonith: sbd: Make failing to set the watchdog timeout non-fatal but annoying
+- stonith: sbd: Make the restart interval for servants configurable
+- stonith: sbd: Maximize scheduler and IO priority in the child processes (bnc#702907)
+- stonith: external/sbd: Fix ordering of arguments in reset
+- stonith: external/ipmi: fix unique parameters' attributes
+- stonith: external/rackpdu: split off assignment from local to
+  make it work with non-bash shells
+- stonith: external: avoid false error if parameter isn't set (bnc#646205)
+- hb_report: add .info files with the last byte pos for all logs
+- hb_report: use sudo for remove collectors if connecting with
+  user other than root
+- hb_report: install debuginfo packages on platforms with zypper (bnc#641979)
+- hb_report: improve detecting ssh user
+
+* Tue Nov 30 2010 Dejan Muhamedagic <dejan@suse.de>, Lars Ellenberg <lars.ellenberg@linbit.com>, and many others
+- stable release 1.0.7
+- clplumbing: ipc: adjust socket buffers size when adjusting ipc queue length
+- logd: add a SIGHUP signal handler to timely close/open log files
+- logd: use buffered io with fflush and fsync
+- logd: reopen logfiles on inode change (logrotate)
+- clplumbing: cl_log: keep logfiles open, but default to non-buffered io (lf#2470)
+- clplumbing: cl_log: add new optional common syslog message prefix
+- stonith: use ST_DEVICEID for the short description in meta-data
+- stonith: external: interpret properly exit codes from external stonith
+  plugins (bnc#630357)
+- stonith: external: avoid false out of memory error if a parameter isn't set (bnc#646205)
+- stonith: external: check if PATH already contains GLUE_SHARED_DIR
+  (memory leak, lf#2484)
+- stonith(8): reduce the number of stonith plugin invocations (bnc#630357)
+- stonith(8): use cl_log for logging if invoked by stonithd (pcmk 1.1)
+- stonith: external/sbd: make sbd use realtime priority for IO (works only with CFQ)
+- stonith: cyclades: add the serial_port parameter to the meta-data
+- stonith: external/riloe: add support for http proxies
+- stonith: external/ipmi: provide opt param "passwd_method" to hide
+  the ipmi password from config and logs
+- stonith: external/nut: support for the Network UPS Tools
+- stonith: external/rackpdu: remove displaced local command
+- stonith: rcd_serial: rename dtr|rts parameter to dtr_rts
+- configure: test for POSIX signals (fixes rcd_serial)
+
 * Fri Jul  9 2010 Dejan Muhamedagic <dejan@suse.de>
 - stable release 1.0.6
 - clplumbing: Add identity info of the user on the other side of socket

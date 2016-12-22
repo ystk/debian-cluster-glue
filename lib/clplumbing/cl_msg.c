@@ -52,10 +52,10 @@
 #define		UUID_SLEN	64
 #define		MAXCHILDMSGLEN  512
 
-static int	compression_threshold = (2*1024);
+static int	compression_threshold = (128*1024);
 
 static enum cl_msgfmt msgfmt = MSGFMT_NVPAIR;
-static	gboolean use_traditional_compression = TRUE;
+static	gboolean use_traditional_compression = FALSE;
 
 const char*
 FT_strings[]={
@@ -598,7 +598,6 @@ ha_msg_addraw_ll(struct ha_msg * msg, char * name, size_t namelen,
 {
 	
 	size_t	startlen = sizeof(MSG_START)-1;
-	int	internal_type;
 	
 
 	int (*addfield) (struct ha_msg* msg, char* name, size_t namelen,
@@ -632,8 +631,6 @@ ha_msg_addraw_ll(struct ha_msg * msg, char * name, size_t namelen,
 		       "cannot add name/value to ha_msg");
 		return(HA_FAIL);
 	}
-	
-	internal_type = type;
 	
 	HA_MSG_ASSERT(type < DIMOF(fieldtypefuncs));
 	
@@ -951,7 +948,6 @@ cl_msg_list_add_string(struct ha_msg* msg, const char* name, const char* value)
 {
 	GList* list = NULL;
 	int ret;
-	char buf[MAXMSG];
 	
 	if(!msg || !name || !value){
 		cl_log(LOG_ERR, "cl_msg_list_add_string: input invalid");
@@ -959,8 +955,7 @@ cl_msg_list_add_string(struct ha_msg* msg, const char* name, const char* value)
 	}
 	
 	
-	strncpy(buf, value, MAXMSG);
-	list = g_list_append(list, buf);
+	list = g_list_append(list, UNCONST_CAST_POINTER(gpointer, value));
 	if (!list){
 		cl_log(LOG_ERR, "cl_msg_list_add_string: append element to"
 		       "a glist failed");
@@ -2313,8 +2308,6 @@ msg2string_buf(const struct ha_msg *m, char* buf, size_t len
 		
 		strcat(bp,"\n");
 		bp++;
-
-
 	}
 	if (needhead){
 		CHECKROOM_CONST(MSG_END);
@@ -2343,14 +2336,7 @@ msg2string(const struct ha_msg *m)
 	
 	len = get_stringlen(m);
 	
-	if (len >= MAXMSG){
-		cl_log(LOG_ERR, "msg2string: msg is too large"
-		       "len =%d,MAX msg allowed=%d", len, MAXMSG);
-		return NULL;
-	}
-	
 	buf = malloc(len);
-
 
 	if (buf == NULL) {
 		cl_log(LOG_ERR, "msg2string: no memory for string");
@@ -2383,6 +2369,7 @@ must_use_netstring(const struct ha_msg* msg)
 
 }
 
+#define use_netstring(m) (msgfmt == MSGFMT_NETSTRING || must_use_netstring(m))
 
 static char*
 msg2wirefmt_ll(struct ha_msg*m, size_t* len, int flag)
@@ -2390,23 +2377,16 @@ msg2wirefmt_ll(struct ha_msg*m, size_t* len, int flag)
 	
 	int	wirefmtlen;
 	int	i;
-	char*	ret;
-	
+	int	netstg = use_netstring(m);
 
-	if (msgfmt == MSGFMT_NETSTRING){
-		wirefmtlen = get_netstringlen(m);		
-	}else{
-		wirefmtlen =  get_stringlen(m);	
-	}
-	
+	wirefmtlen = netstg ? get_netstringlen(m) : get_stringlen(m);
 	if (use_traditional_compression
 	    &&(flag & MSG_NEEDCOMPRESS) 
  	    && (wirefmtlen> compression_threshold) 
  	    && cl_get_compress_fns() != NULL){ 
  		return cl_compressmsg(m, len);		 
  	} 
-	
-	
+
 	if (flag & MSG_NEEDCOMPRESS){
 		for (i=0 ;i < m->nfields; i++){
 			int type = m->types[i];
@@ -2415,69 +2395,45 @@ msg2wirefmt_ll(struct ha_msg*m, size_t* len, int flag)
 			}
 		}
 	}
-	
-	
-	if (msgfmt == MSGFMT_NETSTRING || must_use_netstring(m)){
-		wirefmtlen = get_netstringlen(m);		
-		if (!(flag&MSG_NOSIZECHECK) && wirefmtlen >= MAXMSG){
-			cl_log(LOG_ERR, "%s: msg too big(%d)"
-			       "for netstring fmt",
-			       __FUNCTION__, wirefmtlen);
-			return NULL;
-		}
-		if (flag& MSG_NEEDAUTH){
-			return msg2netstring(m, len);
-		}else{
-			ret =  msg2netstring_noauth(m, len);
-			return ret;
 
+	wirefmtlen = netstg ? get_netstringlen(m) : get_stringlen(m);
+	if (wirefmtlen >= MAXMSG){
+		if (flag&MSG_NEEDCOMPRESS) {
+			if (cl_get_compress_fns() != NULL)
+				return cl_compressmsg(m, len);
 		}
-		
-		
-	}else{
-		char	*tmp;
-		
-		wirefmtlen =  get_stringlen(m);
-		if (wirefmtlen >= MAXMSG){
-			cl_log(LOG_ERR, "%s: msg too big(%d)"
-			       " for string fmt",
-			       __FUNCTION__, wirefmtlen);
-			return NULL;
-		}
-		
-		tmp = msg2string(m);
-		
-		if(tmp == NULL){
-			*len = 0;
-			return NULL;
-		}
-		
-		*len = strlen(tmp) + 1;
-		return(tmp);
+		cl_log(LOG_ERR, "%s: msg too big(%d)",
+			   __FUNCTION__, wirefmtlen);
+		return NULL;
 	}
-	
-
+	if (flag & MSG_NEEDAUTH) {
+		return msg2netstring(m, len);
+	}
+	return msg2wirefmt_noac(m, len);
 }
-
 
 char*
 msg2wirefmt(struct ha_msg*m, size_t* len){
 	return msg2wirefmt_ll(m, len, MSG_NEEDAUTH|MSG_NEEDCOMPRESS);
 }
 
-
 char*
-msg2wirefmt_noac(struct ha_msg*m, size_t* len){
-	
-	/* in this execution path the size check is not necessary;
-	 * still, the msg2wirefmt_ll is invoked more than once for
-	 * the same message (or parts of it) which is somewhat
-	 * strange, though perhaps it helps reduce the code
-	 * complexity
-	 */
-	return msg2wirefmt_ll(m, len, MSG_NOSIZECHECK);
-}
+msg2wirefmt_noac(struct ha_msg*m, size_t* len)
+{
+	if (use_netstring(m)) {
+		return msg2netstring_noauth(m, len);
+	} else {
+		char	*tmp;
 
+		tmp = msg2string(m);
+		if(tmp == NULL){
+			*len = 0;
+			return NULL;
+		}
+		*len = strlen(tmp) + 1;
+		return tmp;
+	}
+}
 
 static struct ha_msg*
 wirefmt2msg_ll(const char* s, size_t length, int need_auth)

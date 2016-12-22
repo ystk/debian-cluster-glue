@@ -15,13 +15,14 @@
 
 Name:		cluster-glue
 Summary:	Reusable cluster components
-Version:	1.0.6
+Version:	1.0.12
 Release:	1%{?dist}
 License:	GPLv2+ and LGPLv2+
 Url:		http://www.linux-ha.org/wiki/Cluster_Glue
 Group:		System Environment/Base
 Source0:	cluster-glue.tar.bz2
 Requires:	perl-TimeDate
+Requires:	cluster-glue-libs = %{version}-%{release}
 
 # Directives to allow upgrade from combined heartbeat packages in Fedora11
 Provides:       heartbeat-stonith = 3.0.0-1
@@ -36,10 +37,11 @@ BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 # Build dependencies
 BuildRequires: automake autoconf libtool pkgconfig which
-BuildRequires: bzip2-devel glib2-devel python-devel libxml2-devel
+BuildRequires: bzip2-devel glib2-devel python-devel libxml2-devel libaio-devel
 BuildRequires: OpenIPMI-devel openssl-devel
 BuildRequires: libxslt docbook-dtds docbook-style-xsl
 BuildRequires: help2man
+BuildRequires: asciidoc
 
 %if 0%{?fedora} 
 BuildRequires:    libcurl-devel libnet-devel
@@ -52,10 +54,15 @@ BuildRequires:    net-snmp-devel >= 5.4
 BuildRequires:    gcc-c++
 %endif
 
-%if 0%{?fedora} < 12
-BuildRequires: e2fsprogs-devel
-%else
+%if 0%{?fedora} > 11 || 0%{?centos} > 5 || 0%{?rhel} > 5
 BuildRequires: libuuid-devel
+%else
+BuildRequires: e2fsprogs-devel
+%endif
+
+%if %{defined systemd_requires}
+BuildRequires:  systemd
+%{?systemd_requires}
 %endif
 
 %prep
@@ -80,6 +87,9 @@ export docdir=%{glue_docdir}
     --with-daemon-user=%{uname} \
     --localstatedir=%{_var} \
     --libdir=%{_libdir} \
+%if %{defined _unitdir}
+    --with-systemdsystemunitdir=%{_unitdir} \
+%endif
     --docdir=%{glue_docdir}
 %endif
 
@@ -110,27 +120,32 @@ standards, and an interface to common STONITH devices.
 %files
 %defattr(-,root,root)
 %dir %{_datadir}/%{name}
+%if %{defined _unitdir}
+%{_unitdir}/logd.service
+%else
 %{_sysconfdir}/init.d/logd
+%endif
 %{_datadir}/%{name}/ha_cf_support.sh
 %{_datadir}/%{name}/openais_conf_support.sh
 %{_datadir}/%{name}/utillib.sh
-%{_datadir}/%{name}/combine-logs.pl
 %{_datadir}/%{name}/ha_log.sh
 
 %{_sbindir}/ha_logger
 %{_sbindir}/hb_report
 %{_sbindir}/lrmadmin
+%{_sbindir}/cibsecret
 %{_sbindir}/meatclient
 %{_sbindir}/stonith
-%{_sbindir}/sbd
 %dir %{_libdir}/heartbeat
 %dir %{_libdir}/heartbeat/plugins
 %dir %{_libdir}/heartbeat/plugins/RAExec
 %dir %{_libdir}/heartbeat/plugins/InterfaceMgr
+%dir %{_libdir}/heartbeat/plugins/compress
 %{_libdir}/heartbeat/lrmd
 %{_libdir}/heartbeat/ha_logd
 %{_libdir}/heartbeat/plugins/RAExec/*.so
 %{_libdir}/heartbeat/plugins/InterfaceMgr/*.so
+%{_libdir}/heartbeat/plugins/compress/*.so
 %dir %{_libdir}/stonith
 %dir %{_libdir}/stonith/plugins
 %dir %{_libdir}/stonith/plugins/stonith2
@@ -159,7 +174,6 @@ standards, and an interface to common STONITH devices.
 %package -n cluster-glue-libs
 Summary:	Reusable cluster libraries
 Group:		Development/Libraries
-Requires:	%{name} = %{version}-%{release}
 Obsoletes:	libheartbeat2
 
 %description -n cluster-glue-libs
@@ -172,6 +186,17 @@ getent passwd %{uname} >/dev/null || \
 useradd -r -g %{gname} -d %{_var}/lib/heartbeat/cores/hacluster -s /sbin/nologin \
 -c "cluster user" %{uname}
 exit 0
+
+%if %{defined _unitdir}
+%post
+%systemd_post logd.service
+
+%preun
+%systemd_preun logd.service
+
+%postun
+%systemd_postun_with_restart logd.service
+%endif
 
 %post -n cluster-glue-libs -p /sbin/ldconfig
 
@@ -188,7 +213,6 @@ exit 0
 %package -n cluster-glue-libs-devel 
 Summary:	Headers and libraries for writing cluster managers
 Group:		Development/Libraries
-Requires:	%{name} = %{version}-%{release}
 Requires:	cluster-glue-libs = %{version}-%{release}
 Obsoletes:	libheartbeat-devel
 

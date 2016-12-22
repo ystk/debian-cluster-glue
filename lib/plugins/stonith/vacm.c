@@ -59,7 +59,7 @@
 
 static StonithPlugin *	vacm_new(const char *);
 static void		vacm_destroy(StonithPlugin *);
-static const char **	vacm_get_confignames(StonithPlugin *);
+static const char * const *	vacm_get_confignames(StonithPlugin *);
 static int		vacm_set_config(StonithPlugin *, StonithNVpair *);
 static const char *	vacm_getinfo(StonithPlugin * s, int InfoType);
 static int		vacm_status(StonithPlugin * );
@@ -138,7 +138,7 @@ static const char * NOTpluginid = "VACM device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_NEXXUS_PARM \
-	XML_PARAMETER_BEGIN(ST_NEXXUS, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_NEXXUS, "string", "1", "1") \
 	  XML_NEXXUS_SHORTDESC \
 	  XML_NEXXUS_LONGDESC \
 	XML_PARAMETER_END
@@ -262,7 +262,7 @@ vacm_hostlist(StonithPlugin *s)
                stonith_free_hostlist(hlst);
                return NULL;
 	    }
-            g_strdown(hlst[hrcnt]);
+            strdown(hlst[hrcnt]);
             hrcnt++;
          }
       }else {
@@ -339,7 +339,7 @@ vacm_reset_req(StonithPlugin *s, int request, const char *host)
 }
 
 /* list => "nexxus:username:password" */
-static const char **
+static const char * const *
 vacm_get_confignames(StonithPlugin * s)
 {
 	static const char * ret[] = {ST_NEXXUS, ST_LOGIN, ST_PASSWD, NULL};

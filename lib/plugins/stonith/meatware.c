@@ -40,7 +40,7 @@
 static StonithPlugin *	meatware_new(const char *);
 static void		meatware_destroy(StonithPlugin *);
 static int		meatware_set_config(StonithPlugin *, StonithNVpair *);
-static const char**	meatware_get_confignames(StonithPlugin *);
+static const char * const *	meatware_get_confignames(StonithPlugin *);
 static const char *	meatware_getinfo(StonithPlugin * s, int InfoType);
 static int		meatware_status(StonithPlugin * );
 static int		meatware_reset_req(StonithPlugin * s, int request, const char * host);
@@ -136,7 +136,7 @@ meatware_hostlist(StonithPlugin  *s)
 		return(NULL);
 	}
 
-	return OurImports->CopyHostList((const char **)nd->hostlist);
+	return OurImports->CopyHostList((const char * const *)nd->hostlist);
 }
 
 /*
@@ -157,7 +157,7 @@ Meat_parse_config_info(struct pluginDevice* nd, const char * info)
 		return S_OOPS;
 	}
 	for (nd->hostcount = 0; nd->hostlist[nd->hostcount]; nd->hostcount++) {
-		g_strdown(nd->hostlist[nd->hostcount]);
+		strdown(nd->hostlist[nd->hostcount]);
 	}
 	return(S_OK);
 }
@@ -202,8 +202,10 @@ meatware_reset_req(StonithPlugin * s, int request, const char * host)
 		return S_OOPS;
 	}
 
+	alarm(600);
 	memset(line, 0, 256);
 	rc = read(fd, line, 256);
+	alarm(0);
 
 	if (rc < 0) {
 		LOG(PIL_CRIT, "read error on FIFO for Meatware_reset_host");
@@ -220,7 +222,7 @@ meatware_reset_req(StonithPlugin * s, int request, const char * host)
 		return S_RESETFAIL;
 	}
 	
-	g_strdown(resp_addr);
+	strdown(resp_addr);
 
 	if (strncmp(resp_mw, "meatware", 8) ||
 	    strncmp(resp_result, "reply", 5) ||
@@ -263,7 +265,7 @@ meatware_set_config(StonithPlugin* s, StonithNVpair *list)
 /*
  * Return STONITH config vars
  */
-static const char**
+static const char * const *
 meatware_get_confignames(StonithPlugin* p)
 {
 	static const char *	MeatwareParams[] = {ST_HOSTLIST, NULL };

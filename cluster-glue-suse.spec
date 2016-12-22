@@ -29,7 +29,7 @@
 
 Name:           cluster-glue
 Summary:        Reusable cluster components
-Version:        1.0.6
+Version:        1.0.12
 Release:        1%{?dist}
 License:        GPL v2 or later; LGPL v2.1 or later
 Url:            http://www.linux-ha.org/wiki/Cluster_Glue
@@ -41,6 +41,8 @@ BuildRequires:  automake autoconf libtool e2fsprogs-devel glib2-devel pkgconfig 
 BuildRequires:  libnet net-snmp-devel OpenIPMI-devel openhpi-devel
 BuildRequires:  libxslt docbook_4 docbook-xsl-stylesheets
 BuildRequires:  help2man
+BuildRequires:  asciidoc
+BuildRequires:  libbz2-devel libaio-devel
 
 Obsoletes:	heartbeat-common
 Provides:	heartbeat-common
@@ -53,6 +55,11 @@ BuildRequires:  tcpd-devel
 BuildRequires:  sgml-skel
 %else
 BuildRequires:  libcurl-devel 
+%endif
+
+%if %{defined systemd_requires}
+BuildRequires:  systemd
+%{?systemd_requires}
 %endif
 
 %description
@@ -111,6 +118,10 @@ export docdir=%{glue_docdir}
     --with-package-name=%{name} \
     --with-daemon-group=%{gname} \
     --with-daemon-user=%{uname} \
+    --with-rundir=%{_rundir} \
+%if %{defined _unitdir}
+    --with-systemdsystemunitdir=%{_unitdir} \
+%endif
     --docdir=%{glue_docdir}
 %endif
 
@@ -126,11 +137,15 @@ find $RPM_BUILD_ROOT -name '*.la' -type f -print0 | xargs -0 rm -f
 find $RPM_BUILD_ROOT -name '*.pyc' -type f -print0 | xargs -0 rm -f
 find $RPM_BUILD_ROOT -name '*.pyo' -type f -print0 | xargs -0 rm -f
 
+%if %{defined _unitdir}
+ln -s /usr/sbin/service %{buildroot}%{_sbindir}/rclogd
+%else
 test -d $RPM_BUILD_ROOT/sbin || mkdir $RPM_BUILD_ROOT/sbin
 (
   cd $RPM_BUILD_ROOT/sbin
   ln -s /etc/init.d/logd rclogd
 )
+%endif
 
 ###########################################################
 
@@ -161,7 +176,20 @@ else
         -d %{_var}/lib/heartbeat/cores/%{uname} -o -u %{uid} \
         %{uname} 2>/dev/null || :
 fi
+%if %{defined _unitdir}
+  %service_add_pre logd.service
+%endif
 
+%if %{defined _unitdir}
+%post
+%service_add_post logd.service
+
+%preun
+%service_del_preun logd.service
+
+%postun
+%service_del_postun logd.service
+%else
 %preun
 %stop_on_removal logd
 
@@ -170,6 +198,7 @@ fi
 
 %postun
 %insserv_cleanup
+%endif
 
 %post -n libglue2
 /sbin/ldconfig  
@@ -191,6 +220,7 @@ fi
 %dir %{_libdir}/heartbeat/plugins
 %dir %{_libdir}/heartbeat/plugins/RAExec
 %dir %{_libdir}/heartbeat/plugins/InterfaceMgr
+%dir %{_libdir}/heartbeat/plugins/compress
 
 %dir %{_libdir}/stonith
 %dir %{_libdir}/stonith/plugins
@@ -200,17 +230,22 @@ fi
 %{_datadir}/%{name}/ha_cf_support.sh
 %{_datadir}/%{name}/openais_conf_support.sh
 %{_datadir}/%{name}/utillib.sh
-%{_datadir}/%{name}/combine-logs.pl
 %{_datadir}/%{name}/ha_log.sh
 
 %{_sbindir}/ha_logger
 %{_sbindir}/hb_report
 %{_sbindir}/lrmadmin
+%{_sbindir}/cibsecret
 %{_sbindir}/meatclient
 %{_sbindir}/stonith
-%{_sbindir}/sbd
 
+%if %{defined _unitdir}
+%{_unitdir}/logd.service
+%{_sbindir}/rclogd
+%else
 %{_sysconfdir}/init.d/logd
+/sbin/rclogd
+%endif
 
 %doc %{_mandir}/man1/*
 %doc %{_mandir}/man8/*
@@ -220,13 +255,12 @@ fi
 %doc logd/logd.cf
 %doc doc/stonith/README*
 
-/sbin/rclogd
-
 %{_libdir}/heartbeat/lrmd
 %{_libdir}/heartbeat/ha_logd
 
 %{_libdir}/heartbeat/plugins/RAExec/*.so
 %{_libdir}/heartbeat/plugins/InterfaceMgr/*.so
+%{_libdir}/heartbeat/plugins/compress/*.so
 
 %{_libdir}/stonith/plugins/external
 %{_libdir}/stonith/plugins/stonith2/*.so

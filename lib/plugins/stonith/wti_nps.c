@@ -78,7 +78,7 @@
 
 static StonithPlugin *	wti_nps_new(const char *);
 static void		wti_nps_destroy(StonithPlugin *);
-static const char**	wti_nps_get_confignames(StonithPlugin *);
+static const char * const *	wti_nps_get_confignames(StonithPlugin *);
 static int		wti_nps_set_config(StonithPlugin * , StonithNVpair * );
 static const char *	wti_nps_get_info(StonithPlugin * s, int InfoType);
 static int		wti_nps_status(StonithPlugin * );
@@ -538,7 +538,7 @@ wti_nps_hostlist(StonithPlugin  *s)
 			if ((nm = STRDUP(sockname)) == NULL) {
 				goto out_of_memory;
 			}
-			g_strdown(nm);
+			strdown(nm);
 			NameList[numnames] = nm;
 			++numnames;
 			NameList[numnames] = NULL;
@@ -689,7 +689,7 @@ wti_nps_set_config(StonithPlugin * s, StonithNVpair *list)
  * Return the Stonith plugin configuration parameter 
  *
  */
-static const char**
+static const char * const *
 wti_nps_get_confignames(StonithPlugin * p)
 {
 	static	const char * names[] =  { ST_IPADDR , ST_PASSWD , NULL};

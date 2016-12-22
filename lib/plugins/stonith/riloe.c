@@ -33,7 +33,7 @@
 static StonithPlugin *	riloe_new(const char *);
 static void		riloe_destroy(StonithPlugin *);
 static int		riloe_set_config(StonithPlugin *, StonithNVpair *);
-static const char **	riloe_get_confignames(StonithPlugin * );
+static const char * const *	riloe_get_confignames(StonithPlugin * );
 static const char *	riloe_getinfo(StonithPlugin * s, int InfoType);
 static int		riloe_status(StonithPlugin * );
 static int		riloe_reset_req(StonithPlugin * s, int request, const char * host);
@@ -140,7 +140,7 @@ riloe_hostlist(StonithPlugin  *s)
 		return(NULL);
 	}
 
-	return OurImports->CopyHostList((const char **)nd->hostlist);
+	return OurImports->CopyHostList((const char * const*)nd->hostlist);
 }
 
 /*
@@ -164,7 +164,7 @@ RILOE_parse_config_info(struct pluginDevice* nd, const char * info)
 		return S_OOPS;
 	}
 	for (nd->hostcount = 0; nd->hostlist[nd->hostcount]; nd->hostcount++) {
-		g_strdown(nd->hostlist[nd->hostcount]);
+		strdown(nd->hostlist[nd->hostcount]);
 	}
 	return(S_OK);
 }
@@ -236,7 +236,7 @@ riloe_set_config(StonithPlugin* s, StonithNVpair *list)
 /*
  *  Return the  Stonith plugin configuration parameter
  */
-static const char**
+static const char* const *
 riloe_get_confignames(StonithPlugin* p)
 {
 	static const char *	RiloeParams[] = {ST_HOSTLIST, NULL };

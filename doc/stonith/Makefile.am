@@ -23,11 +23,15 @@ stdoc_DATA 		= README.bladehpi \
 			  README.external \
 			  README.ibmrsa \
 			  README.ibmrsa-telnet \
-			  README.ipmilan \
 			  README.meatware \
 			  README.rackpdu \
 			  README.rcd_serial \
 			  README.riloe \
 			  README.vacm \
 			  README.wti_mpc \
-			  README_kdumpcheck.txt
+			  README_kdumpcheck.txt \
+			  README.vcenter
+
+if IPMILAN_BUILD
+stdoc_DATA 		+= README.ipmilan
+endif

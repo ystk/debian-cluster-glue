@@ -335,10 +335,10 @@ StartProcess(const char * cmd, int * readfd, int * writefd)
 }
 
 static char **
-stonith_copy_hostlist(const char** hostlist)
+stonith_copy_hostlist(const char * const * hostlist)
 {
 	int hlleng = 1;
-	const char ** here = hostlist;
+	const char * const * here = hostlist;
 	char ** hret;
 	char **	ret;
 
@@ -414,7 +414,7 @@ StringToHostList(const char * s)
 		memcpy(*hret, here, slen);
 		/* Add EOS to result string */
 		(*hret)[slen] = EOS;
-		g_strdown(*hret);
+		strdown(*hret);
 		here += slen;
 		++hret;
 	}

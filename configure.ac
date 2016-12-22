@@ -19,9 +19,9 @@ dnl     checks for compiler characteristics
 dnl     checks for library functions
 dnl     checks for system services
 
-AC_INIT(cluster-glue, 1.0.6, linux-ha-dev@lists.linux-ha.org)
+AC_INIT(cluster-glue, 1.0.12, linux-ha-dev@lists.linux-ha.org)
 
-PKG_FEATURES=""
+FEATURES=""
 HB_PKG=heartbeat
 
 AC_CONFIG_AUX_DIR(.)
@@ -52,6 +52,22 @@ AC_ARG_WITH(pkg-name,
     [  --with-pkg-name=name     Override package name (if you're a packager needing to pretend) ],
     [ PACKAGE_NAME="$withval" ])
 
+PKG_PROG_PKG_CONFIG
+AC_ARG_WITH([systemdsystemunitdir],
+     [AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files])],,
+     [with_systemdsystemunitdir=auto])
+AS_IF([test "x$with_systemdsystemunitdir" = "xyes" -o "x$with_systemdsystemunitdir" = "xauto"], [
+     def_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
+
+     AS_IF([test "x$def_systemdsystemunitdir" = "x"],
+         [AS_IF([test "x$with_systemdsystemunitdir" = "xyes"],
+                [AC_MSG_ERROR([systemd support requested but pkg-config unable to query systemd package])])
+          with_systemdsystemunitdir=no],
+         [with_systemdsystemunitdir="$def_systemdsystemunitdir"])])
+AS_IF([test "x$with_systemdsystemunitdir" != "xno"],
+      [AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])])
+AM_CONDITIONAL([HAVE_SYSTEMD], [test "x$with_systemdsystemunitdir" != "xno"])
+
 AM_INIT_AUTOMAKE($PACKAGE_NAME, $PACKAGE_VERSION)
 AC_DEFINE_UNQUOTED(GLUE_VERSION, "$PACKAGE_VERSION", Current version of the glue library)
 
@@ -79,6 +95,7 @@ AC_CHECK_SIZEOF(short)
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(long long)
+AC_CHECK_SIZEOF(clock_t, [], [#include <sys/times.h>])
 AC_STRUCT_TIMEZONE
 
 dnl ===============================================
@@ -87,7 +104,7 @@ dnl ===============================================
 cc_supports_flag() {
          local CFLAGS="$@"
          AC_MSG_CHECKING(whether $CC supports "$@")
-         AC_COMPILE_IFELSE([int main(){return 0;}] ,[RC=0; AC_MSG_RESULT(yes)],[RC=1; AC_MSG_RESULT(no)])
+         AC_COMPILE_IFELSE([AC_LANG_SOURCE(int main(){return 0;})] ,[RC=0; AC_MSG_RESULT(yes)],[RC=1; AC_MSG_RESULT(no)])
          return $RC
 }
 
@@ -129,6 +146,10 @@ AC_ARG_ENABLE([bundled-ltdl],
 [  --enable-bundled-ltdl  Configure, build and install the standalone ltdl library bundled with ${PACKAGE} [default=no]]) 
 LTDL_LIBS=""
 
+AC_ARG_ENABLE([upstart],
+AS_HELP_STRING([--enable-upstart],
+               [Enable Upstart support in lrmd. [default=no]]))
+
 INITDIR=""
 AC_ARG_WITH(initdir,
     [  --with-initdir=DIR      directory for init (rc) scripts [${INITDIR}]],
@@ -154,6 +175,15 @@ AC_ARG_WITH(
                           User to run privileged non-root things as. [default=hacluster]  ],
     [ GLUE_DAEMON_USER="$withval" ],
     [ GLUE_DAEMON_USER="hacluster" ],
+  )
+
+
+AC_ARG_WITH(
+  rundir,
+    [ --with-rundir=DIR
+			directory to store state information [default=localstatedir/run] ],
+    [ GLUE_STATE_DIR="$withval" ],
+    [ GLUE_STATE_DIR="${localstatedir}/run" ],
   )
 
 dnl ===============================================
@@ -388,6 +418,14 @@ HA_COREDIR="${localstatedir}/lib/heartbeat/cores"
 AC_DEFINE_UNQUOTED(HA_COREDIR,"$HA_COREDIR", top directory of area to drop core files in)
 AC_SUBST(HA_COREDIR)
 
+LRM_VARLIBDIR="${localstatedir}/lib/heartbeat/lrm"
+AC_DEFINE_UNQUOTED(LRM_VARLIBDIR,"$LRM_VARLIBDIR", LRM directory)
+AC_SUBST(LRM_VARLIBDIR)
+
+LRM_CIBSECRETS="${localstatedir}/lib/heartbeat/lrm/secrets"
+AC_DEFINE_UNQUOTED(LRM_CIBSECRETS,"$LRM_CIBSECRETS", CIB secrets location)
+AC_SUBST(LRM_CIBSECRETS)
+
 AC_DEFINE_UNQUOTED(PILS_BASE_PLUGINDIR,"$libdir/heartbeat/plugins", Default plugin search path)
 AC_DEFINE_UNQUOTED(HA_PLUGIN_DIR,"$libdir/heartbeat/plugins", Where to find plugins)
 AC_DEFINE_UNQUOTED(LRM_PLUGIN_DIR,"$libdir/heartbeat/plugins/RAExec", Where to find LRM plugins)
@@ -441,24 +479,12 @@ AC_DEFINE_UNQUOTED(GLUE_BUILD_VERSION, "$GLUE_BUILD_VERSION", Build version)
 AC_MSG_RESULT($GLUE_BUILD_VERSION)
 AC_SUBST(GLUE_BUILD_VERSION)
 
-
-dnl check if there are getpid() inconsistency
-dnl	Note: reduce LIBS; in particular, ltdl can cause confusion.
-dnl	Possibly better:  move 'LIBS="$LIBS -lltdl"' from above to beyond here.
-dnl
-AC_MSG_CHECKING(for getpid() consistency in multi-process/threads program)
-ac_save_LIBS=$LIBS
-LIBS="-lpthread"
-AC_TRY_RUN(`cat $srcdir/config/pidtest.c`, 
-AC_MSG_RESULT(ok), 
-[AC_MSG_RESULT(fail); AC_DEFINE(GETPID_INCONSISTENT, 1 , [pid inconsistent])],)
-LIBS=$ac_save_LIBS
-
 dnl check byte order
 AC_MSG_CHECKING(for byteorder)
-AC_TRY_RUN(`cat $srcdir/config/byteorder_test.c`,
+AC_C_BIGENDIAN(
+[AC_MSG_RESULT(big-endian); AC_DEFINE(CONFIG_BIG_ENDIAN, 1, [big-endian])],
 [AC_MSG_RESULT(little-endian); AC_DEFINE(CONFIG_LITTLE_ENDIAN, 1, [little-endian])],
-[AC_MSG_RESULT(big-endian); AC_DEFINE(CONFIG_BIG_ENDIAN, 1, [big-endian])],)
+)
 
 
 dnl ===============================================
@@ -492,11 +518,20 @@ AC_PATH_PROGS(EGREP, egrep)
 AC_PATH_PROGS(PKGCONFIG, pkg-config)
 AC_PATH_PROGS(XML2CONFIG, xml2-config)
 
-AC_PATH_PROGS(XSLTPROC, xsltproc)
-AM_CONDITIONAL(BUILD_DOC, test "x$XSLTPROC" != "x" )
-if test "x$XSLTPROC" = "x"; then
-   AC_MSG_WARN([xsltproc not installed, unable to (re-)build manual pages])
+AC_ARG_ENABLE([doc],
+ AS_HELP_STRING([--enable-doc], [build documentation (default is yes)]),
+ [], [enable_doc=yes])
+if test "x$enable_doc" != "xno"; then
+       AC_PATH_PROGS(XSLTPROC, xsltproc)
+       if test "x$XSLTPROC" = "x"; then
+           AC_MSG_WARN([xsltproc not installed, unable to (re-)build manual pages])
+       fi
+       AC_PATH_PROGS(ASCIIDOC, asciidoc)
+       if test "x$ASCIIDOC" = "x"; then
+           AC_MSG_WARN([asciidoc not installed, unable to (re-)build manual pages])
+       fi
 fi
+AM_CONDITIONAL(BUILD_DOC, test "x$XSLTPROC" != "x" )
 
 AC_PATH_PROGS(VALGRIND_BIN, valgrind, /usr/bin/valgrind)
 AC_DEFINE_UNQUOTED(VALGRIND_BIN, "$VALGRIND_BIN", Valgrind command)
@@ -533,7 +568,7 @@ fi
 
 AM_CONDITIONAL(BUILD_HELP, test x"${HELP2MAN}" != x"")
 if test x"${HELP2MAN}" != x""; then
-   PKG_FEATURES="$PKG_FEATURES manpages"
+   FEATURES="$FEATURES manpages"
 fi
 
 dnl ===============================================
@@ -639,7 +674,11 @@ AC_CHECK_HEADERS(getopt.h)
 AC_CHECK_HEADERS(glib.h)
 AC_CHECK_HEADERS(grp.h)
 AC_CHECK_HEADERS(limits.h)
-AC_CHECK_HEADERS(linux/errqueue.h)
+AC_CHECK_HEADERS(linux/errqueue.h,,,
+	[#ifdef HAVE_LINUX_TYPES_H
+	 # include <linux/types.h>
+	 #endif
+	])
 AC_CHECK_HEADERS(malloc.h)
 AC_CHECK_HEADERS(netdb.h)
 AC_CHECK_HEADERS(netinet/in.h)
@@ -711,6 +750,18 @@ AC_TRY_COMPILE([
 ac_cv_HAVE_SYSLOG_FACILITYNAMES=yes,ac_cv_HAVE_SYSLOG_FACILITYNAMES=no,ac_cv_HAVE_SYSLOG_FACILITYNAMES=cross)])
 if test x"$ac_cv_HAVE_SYSLOG_FACILITYNAMES" = x"yes"; then
     AC_DEFINE(HAVE_SYSLOG_FACILITYNAMES,1,[ ])
+fi
+
+dnl Check for POSIX signals
+dnl
+AC_CACHE_CHECK([have POSIX signals],ac_cv_HAVE_POSIX_SIGNALS,[
+AC_TRY_COMPILE([
+#include <signal.h>
+],
+[ struct sigaction act, oact; sigaction(0, &act, &oact); return 0;],
+ac_cv_HAVE_POSIX_SIGNALS=yes,ac_cv_HAVE_POSIX_SIGNALS=no,ac_cv_HAVE_POSIX_SIGNALS=cross)])
+if test x"$ac_cv_HAVE_POSIX_SIGNALS" = x"yes"; then
+    AC_DEFINE(HAVE_POSIX_SIGNALS,1,[ ])
 fi
 
 dnl 'reboot()' system call: one argument (e.g. Linux) or two (e.g. Solaris)?
@@ -788,7 +839,7 @@ AC_CHECK_MEMBERS([struct tm.tm_gmtoff],,,[[#include <time.h>]])
 AC_CHECK_TYPES([nfds_t],,,[[#include <poll.h>]])
 
 AC_MSG_CHECKING(if clock_t is long enough)
-if test $ac_cv_sizeof_long -ge 8; then
+if test $ac_cv_sizeof_clock_t -ge 8; then
   AC_MSG_RESULT(yes)
   AC_DEFINE(CLOCK_T_IS_LONG_ENOUGH, 1, [Set if CLOCK_T is adequate by itself for the "indefinite future" (>= 100 years)])
 else
@@ -912,7 +963,7 @@ dnl ========================================================================
 
 AC_ARG_ENABLE([libnet],
  [  --enable-libnet 	Use libnet for ARP based funcationality, [default=try]], 
- [enable_libnet=$withval], [enable_libnet=try])
+ [], [enable_libnet=try])
 
 libnet=""
 libnet_version="none"
@@ -1021,7 +1072,7 @@ elif test "x${ac_cv_header_net_snmp_net_snmp_config_h}" = "xyes"; then
 		ENABLE_SNMP="no"
 	else
 		AC_MSG_CHECKING(for special snmp libraries)
-		SNMPLIB=`net-snmp-config --libs`
+		SNMPLIB=`${SNMPCONFIG} --libs`
 		AC_MSG_RESULT($SNMPLIB)
 	fi
 elif test "x${ac_cv_header_ucd_snmp_snmp_h}" = "xyes"; then
@@ -1074,19 +1125,44 @@ AM_CONDITIONAL(USE_OPENHPI, test "$ac_cv_header_openhpi_SaHpi_h" = yes && pkg-co
 AM_CONDITIONAL(IPMILAN_BUILD, test "X$enable_ipmilan" = "Xyes")
 
 dnl ========================================================================
-dnl    BZ2
+dnl    ZLIB and BZ2
 dnl ========================================================================
 
-AC_CHECK_HEADERS(bzlib.h)
-AC_CHECK_LIB(bz2, BZ2_bzBuffToBuffCompress)
-
-if test x$ac_cv_lib_bz2_BZ2_bzBuffToBuffCompress != xyes ; then
-   AC_MSG_ERROR(BZ2 libraries not found)
+dnl check if header file and lib are there for zlib
+zlib_installed="yes"
+AC_CHECK_HEADERS(zlib.h, , [zlib_installed="no"],)
+AC_CHECK_LIB(z, compress , , [zlib_installed="no"])
+AM_CONDITIONAL(BUILD_ZLIB_COMPRESS_MODULE, test "x${zlib_installed}" = "xyes")
+if test "x${zlib_installed}" = "xno"; then
+	FatalMissingThing "zlib" \
+	  "The zlib library is missing"
 fi
+
+bz2_installed="yes"
+AC_CHECK_HEADERS(bzlib.h, , [bz2_installed="no"],)
+AC_CHECK_LIB(bz2, BZ2_bzBuffToBuffCompress , , [bz2_installed="no"])
+AM_CONDITIONAL(BUILD_BZ2_COMPRESS_MODULE, test "x${bz2_installed}" = "xyes")
+
+#if test x$ac_cv_lib_bz2_BZ2_bzBuffToBuffCompress != xyes ; then
+#   AC_MSG_ERROR(BZ2 libraries not found)
+#fi
 
 if test x$ac_cv_header_bzlib_h != xyes; then
    AC_MSG_ERROR(BZ2 Development headers not found)
 fi
+
+dnl ========================================================================
+dnl    Upstart via DBus
+dnl ========================================================================
+
+if test x$enable_upstart = xyes; then
+   PKG_CHECK_MODULES(DBUS, [dbus-1, dbus-glib-1])
+   AC_SUBST(DBUS_CFLAGS)
+   AC_SUBST(DBUS_LIBS)
+   AC_PATH_PROGS(DBUS_BINDING_TOOL, dbus-binding-tool)
+fi
+AM_CONDITIONAL(UPSTART, test x$enable_upstart = xyes)
+
 
 dnl ========================================================================
 dnl checks for library functions to replace them
@@ -1150,7 +1226,7 @@ if test "$GCC" != yes; then
         CFLAGS="$CFLAGS -g"
 	enable_fatal_warnings=no
 else
-        CFLAGS="$CFLAGS -ggdb3 -O0"
+        CFLAGS="$CFLAGS -ggdb"
 
 	# We had to eliminate -Wnested-externs because of libtool changes
         EXTRA_FLAGS="-fgnu89-inline
@@ -1158,7 +1234,7 @@ else
 		-Wall
 		-Waggregate-return
 		-Wbad-function-cast 
-		-Wcast-qual 
+		-Wcast-qual
 		-Wcast-align 
 		-Wdeclaration-after-statement
 		-Wendif-labels
@@ -1281,6 +1357,7 @@ AC_SUBST(QUIET_LIBTOOL_OPTS)
 
 dnl The Makefiles and shell scripts we output
 AC_CONFIG_FILES(Makefile				        \
+config/Makefile						\
 include/Makefile						\
    include/pils/Makefile					\
    include/pils/plugin.h					\
@@ -1294,7 +1371,9 @@ lib/Makefile							\
    lib/lrm/Makefile						\
    lib/plugins/Makefile						\
       lib/plugins/InterfaceMgr/Makefile				\
+      lib/plugins/compress/Makefile					\
       lib/plugins/lrm/Makefile					\
+         lib/plugins/lrm/dbus/Makefile				\
       lib/plugins/stonith/Makefile				\
          lib/plugins/stonith/ribcl.py				\
          lib/plugins/stonith/external/Makefile			\
@@ -1306,15 +1385,15 @@ lib/Makefile							\
 lrm/Makefile					        	\
    lrm/lrmd/Makefile				        	\
    lrm/admin/Makefile				        	\
+   lrm/admin/cibsecret				        	\
    lrm/test/Makefile				        	\
    lrm/test/regression.sh					\
    lrm/test/lrmregtest						\
-   lrm/test/lrmregtest-lsb					\
-   lrm/test/lrmregtest-heartbeat				\
    lrm/test/LRMBasicSanityCheck			        	\
    lrm/test/testcases/Makefile			        	\
 logd/Makefile					        	\
 logd/logd					        	\
+logd/logd.service					        	\
 replace/Makefile				        	\
 hb_report/Makefile				        	\
    hb_report/hb_report				        	\
@@ -1337,7 +1416,7 @@ dnl *****************
 AC_MSG_RESULT([])
 AC_MSG_RESULT([$PACKAGE configuration:])
 AC_MSG_RESULT([  Version                  = ${VERSION} (Build: $GLUE_BUILD_VERSION)])
-AC_MSG_RESULT([  Features                 =${PKG_FEATURES}])
+AC_MSG_RESULT([  Features                 =${FEATURES}])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([  Prefix                   = ${prefix}])
 AC_MSG_RESULT([  Executables              = ${sbindir}])

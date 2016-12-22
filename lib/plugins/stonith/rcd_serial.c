@@ -43,7 +43,7 @@
 #define PIL_PLUGINLICENSE 	LICENSE_LGPL
 #define PIL_PLUGINLICENSEURL 	URL_LGPL
 
-#define	ST_DTRRTS		"dtr|rts"
+#define	ST_DTRRTS		"dtr_rts"
 #define	ST_MSDURATION		"msduration"
 #define MAX_RCD_SERIALLINE	512
 
@@ -54,7 +54,7 @@
 static StonithPlugin*	rcd_serial_new(const char *);
 static void		rcd_serial_destroy(StonithPlugin *);
 static int		rcd_serial_set_config(StonithPlugin *, StonithNVpair *);
-static const char **	rcd_serial_get_confignames(StonithPlugin *);
+static const char * const *	rcd_serial_get_confignames(StonithPlugin *);
 static const char *	rcd_serial_getinfo(StonithPlugin * s, int InfoType);
 static int		rcd_serial_status(StonithPlugin * );
 static int		rcd_serial_reset_req(StonithPlugin * s, int request, const char * host);
@@ -268,7 +268,7 @@ static const char * NOTrcd_serialID = "RCD_Serial device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_DTRRTS_PARM \
-	XML_PARAMETER_BEGIN(ST_DTRRTS, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_DTRRTS, "string", "1", "0") \
 	  XML_DTRRTS_SHORTDESC \
 	  XML_DTRRTS_LONGDESC \
 	XML_PARAMETER_END
@@ -284,7 +284,7 @@ static const char * NOTrcd_serialID = "RCD_Serial device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_MSDURATION_PARM \
-	XML_PARAMETER_BEGIN(ST_MSDURATION, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_MSDURATION, "string", "1", "0") \
 	  XML_MSDURATION_SHORTDESC \
 	  XML_MSDURATION_LONGDESC \
 	XML_PARAMETER_END
@@ -347,7 +347,7 @@ rcd_serial_hostlist(StonithPlugin  *s)
 		return(NULL);
 	}
 
-	return OurImports->CopyHostList((const char **)rcd->hostlist);
+	return OurImports->CopyHostList((const char * const *)rcd->hostlist);
 }
 
 /*
@@ -467,7 +467,7 @@ rcd_serial_set_config(StonithPlugin* s, StonithNVpair *list)
 		return S_OOPS;
 	}
 	rcd->hostlist[0] = namestocopy[0].s_value;
-	g_strdown(rcd->hostlist[0]);
+	strdown(rcd->hostlist[0]);
 	rcd->hostlist[1] = NULL;
 	rcd->hostcount = 1;
 	rcd->device = namestocopy[1].s_value;
@@ -497,7 +497,7 @@ rcd_serial_set_config(StonithPlugin* s, StonithNVpair *list)
 /*
  * Return STONITH config vars
  */
-static const char**
+static const char * const *
 rcd_serial_get_confignames(StonithPlugin* p)
 {
 	static const char *	RcdParams[] = {ST_HOSTLIST, ST_TTYDEV

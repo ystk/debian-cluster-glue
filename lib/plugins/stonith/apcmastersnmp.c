@@ -75,7 +75,7 @@
 
 static StonithPlugin *	apcmastersnmp_new(const char *);
 static void	apcmastersnmp_destroy(StonithPlugin *);
-static const char **	apcmastersnmp_get_confignames(StonithPlugin *);
+static const char * const *	apcmastersnmp_get_confignames(StonithPlugin *);
 static int	apcmastersnmp_set_config(StonithPlugin *, StonithNVpair *);
 static const char *	apcmastersnmp_getinfo(StonithPlugin * s, int InfoType);
 static int	apcmastersnmp_status(StonithPlugin * );
@@ -171,7 +171,7 @@ struct pluginDevice {
 };
 
 /* for checking hardware (issue a warning if mismatch) */
-static const char* APC_tested_ident[] = {"AP9606","AP7920","AP7921","AP_other_well_tested"};
+static const char* APC_tested_ident[] = {"AP9606","AP7920","AP7921","AP7900","AP_other_well_tested"};
 
 /* constant strings */
 static const char *pluginid = "APCMS-SNMP-Stonith";
@@ -190,7 +190,7 @@ static const char *NOTpluginID = "APCMS SNMP device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_PORT_PARM \
-	XML_PARAMETER_BEGIN(ST_PORT, "string", "1") \
+	XML_PARAMETER_BEGIN(ST_PORT, "string", "1", "0") \
 	  XML_PORT_SHORTDESC \
 	  XML_PORT_LONGDESC \
 	XML_PARAMETER_END
@@ -490,7 +490,7 @@ apcmastersnmp_hostlist(StonithPlugin * s)
 		    hl = NULL;
 		    return (hl);
 		}
-		g_strdown(hl[num_outlets]);
+		strdown(hl[num_outlets]);
 		num_outlets++;
 	}
     }
@@ -700,7 +700,7 @@ apcmastersnmp_reset_req(StonithPlugin * s, int request, const char *host)
  * Get the configuration parameter names.
  */
 
-static const char **
+static const char * const *
 apcmastersnmp_get_confignames(StonithPlugin * s)
 {
 	static const char * ret[] = {ST_IPADDR, ST_PORT, ST_COMMUNITY, NULL};

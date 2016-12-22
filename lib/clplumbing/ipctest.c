@@ -394,7 +394,7 @@ transport_tests(int iterations, int clients)
 	return rc;
 }
 
-static int data_size = 10;
+static int data_size = 20;
 
 int
 main(int argc, char ** argv)
@@ -438,6 +438,10 @@ main(int argc, char ** argv)
 				fprintf(stderr, "data size must be >=0\n");
 				argerrs++;
 			}
+			if (data_size > MAXMSG) {
+				fprintf(stderr, "maximum data size is %d\n", MAXMSG);
+				argerrs++;
+			}
 			break;
 		default:
 			argerrs++;
@@ -450,7 +454,7 @@ main(int argc, char ** argv)
 			"\t-v : verbose\n"
 			"\t-i : iterations (default %d)\n"
 			"\t-c : number of clients (default %d; nonzero invokes client/server)\n"
-			"\t-s : data size (default 10 bytes)\n",
+			"\t-s : data size (default 20 bytes)\n",
 		  procname, iter_def, clients_def);
 		exit(1);
 	}
@@ -560,7 +564,10 @@ echoserver(IPC_Channel* wchan, int repcount)
 	IPC_Message	wmsg;
 	IPC_Message*	rmsg = NULL;
 	
-	str = malloc(data_size);
+	if (!(str = malloc(data_size))) {
+		cl_log(LOG_ERR, "Out of memory");
+		exit(1);
+	}
 	
 	memset(&wmsg, 0, sizeof(wmsg));
 	wmsg.msg_private = NULL;
@@ -1205,7 +1212,10 @@ checkmsg(IPC_Message* rmsg, const char * who, int rcount)
 	char		*str;
 	size_t		len;
 	
-	str = malloc(data_size);
+	if (!(str = malloc(data_size))) {
+		cl_log(LOG_ERR, "Out of memory");
+		exit(1);
+	}
 
 	echomsgbody(str, data_size, rcount, &len);
 
@@ -1326,7 +1336,6 @@ static int
 mainloop_server(IPC_Channel* chan, int repcount)
 {
 	struct iterinfo info;
-	GCHSource*	msgchan;
 	guint		sendmsgsrc;
 
 	
@@ -1340,7 +1349,7 @@ mainloop_server(IPC_Channel* chan, int repcount)
 	chan->low_flow_mark = 2;
 
 	sendmsgsrc = g_idle_add(s_send_msg, &info);
-	msgchan = G_main_add_IPC_Channel(G_PRIORITY_DEFAULT, chan
+	G_main_add_IPC_Channel(G_PRIORITY_DEFAULT, chan
 	,	FALSE, s_rcv_msg, &info, NULL);
 	cl_log(LOG_INFO, "Mainloop echo server: %d reps pid %d.", repcount, (int)getpid());
 	g_main_run(loop);

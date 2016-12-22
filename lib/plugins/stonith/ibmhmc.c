@@ -131,7 +131,7 @@
 static StonithPlugin *	ibmhmc_new(const char *);
 static void		ibmhmc_destroy(StonithPlugin *);
 static const char *	ibmhmc_getinfo(StonithPlugin * s, int InfoType);
-static const char**	ibmhmc_get_confignames(StonithPlugin* p);
+static const char * const *	ibmhmc_get_confignames(StonithPlugin* p);
 static int		ibmhmc_status(StonithPlugin * );
 static int		ibmhmc_reset_req(StonithPlugin * s,int request,const char* host);
 static char **		ibmhmc_hostlist(StonithPlugin  *);
@@ -209,7 +209,7 @@ static const char * NOTpluginID = "IBM HMC device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_MANSYSPAT_PARM \
-	XML_PARAMETER_BEGIN(ST_MANSYSPAT, "string", "0") \
+	XML_PARAMETER_BEGIN(ST_MANSYSPAT, "string", "0", "0") \
 	  XML_MANSYSPAT_SHORTDESC \
 	  XML_MANSYSPAT_LONGDESC \
 	XML_PARAMETER_END
@@ -220,7 +220,7 @@ static const char * NOTpluginID = "IBM HMC device has been destroyed";
 	XML_PARM_LONGDESC_END
 
 #define XML_OPTPASSWD_PARM \
-	XML_PARAMETER_BEGIN(ST_PASSWD, "string", "0") \
+	XML_PARAMETER_BEGIN(ST_PASSWD, "string", "0", "0") \
 	  XML_PASSWD_SHORTDESC \
 	  XML_OPTPASSWD_LONGDESC \
 	XML_PARAMETER_END
@@ -312,13 +312,13 @@ ibmhmc_hostlist(StonithPlugin  *s)
 			stonith_free_hostlist(ret);
 			return NULL;
 		}
-		g_strdown(ret[j]);
+		strdown(ret[j]);
 	}
 	return ret;
 }
 
 
-static const char**     
+static const char * const *
 ibmhmc_get_confignames(StonithPlugin* p)
 {
 	static const char * names[] = {ST_IPADDR, NULL};

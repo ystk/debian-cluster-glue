@@ -166,7 +166,8 @@ static char **
 get_plugin_list(const char *pltype)
 {
 	char **	typelist = NULL;
-	const char **extPI, **p;
+	const char * const *extPI;
+	const char * const *p;
 	int numextPI, i;
 	Stonith * ext;
 
@@ -177,16 +178,15 @@ get_plugin_list(const char *pltype)
 		return NULL;
 	}
 	if ((extPI = stonith_get_confignames(ext)) == NULL) {
-		LOG(PIL_INFO, "Cannot get %s plugin subplugins", pltype);
+		/* don't complain if rhcs plugins are not installed */
+		if (strcmp(pltype, "rhcs"))
+			LOG(PIL_INFO, "Cannot get %s plugin subplugins", pltype);
 		stonith_delete(ext);
 		return NULL;
 	}
 
 	/* count the external plugins */
 	for (numextPI = 0, p = extPI; *p; p++, numextPI++);
-
-	/* sort the external plugins */
-	qsort(extPI, numextPI, sizeof(char *), qsort_string_cmp);
 
 	typelist = (char **)
 		MALLOC((numextPI+1)*sizeof(char *));
@@ -213,6 +213,10 @@ get_plugin_list(const char *pltype)
 	}
 
 	stonith_delete(ext);
+
+	/* sort the list of plugin names */
+	qsort(typelist, numextPI, sizeof(char *), qsort_string_cmp);
+
 	return typelist;
 err:
 	stonith_free_hostlist(typelist);
@@ -303,7 +307,7 @@ stonith_delete(Stonith *s)
 	}
 }
 
-const char **
+const char * const *
 stonith_get_confignames(Stonith* s)
 {
 	StonithPlugin*	sp = (StonithPlugin*)s;
@@ -443,6 +447,16 @@ stonith_get_status(Stonith* s)
 	return S_INVAL;
 }
 
+void
+strdown(char *str)
+{
+	while( *str ) {
+		if( isupper(*str) )
+			*str = tolower(*str);
+		str++;
+	}
+}
+
 int
 stonith_req_reset(Stonith* s, int operation, const char* node)
 {
@@ -453,7 +467,7 @@ stonith_req_reset(Stonith* s, int operation, const char* node)
 		if (nodecopy == NULL) {
 			return S_OOPS;
 		}
-		g_strdown(nodecopy);
+		strdown(nodecopy);
 
 		rc = sp->s_ops->req_reset(sp, operation, nodecopy);
 		FREE(nodecopy);
@@ -471,7 +485,7 @@ stonith1_compat_string_to_NVpair(Stonith* s, const char * str)
 	 * Everything after the last delimiter is passed along as part of
 	 * the final argument - white space and all...
 	 */
-	const char **	config_names;
+	const char * const *	config_names;
 	int		n_names;
 	int		j;
 	const char *	delims = " \t\n\r\f";
@@ -521,7 +535,7 @@ StonithNVpair*
 stonith_env_to_NVpair(Stonith* s)
 {
 	/* Read the config names values from the environment */
-	const char **	config_names;
+	const char * const *	config_names;
 	int		n_names;
 	int		j;
 	StonithNVpair*	ret;
